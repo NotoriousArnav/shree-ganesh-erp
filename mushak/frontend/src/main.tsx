@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 
 import RequireRole from "./components/require-role";
 import MerchantLayout from "./components/merchant-layout";
+import { startThemeWatcher } from "./lib/theme";
 import Admin from "./routes/Admin";
 import ForgotPassword from "./routes/ForgotPassword";
 import Home from "./routes/Home";
@@ -55,6 +56,8 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+
+startThemeWatcher();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

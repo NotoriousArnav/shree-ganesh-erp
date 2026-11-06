@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
@@ -80,7 +81,11 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
+    <main className="relative flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
           <img

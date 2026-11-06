@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/theme-toggle";
 import { api, errorMessage } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import type { Profile } from "@/lib/types";
@@ -89,6 +90,12 @@ export default function MerchantLayout() {
         </nav>
 
         <div className="border-t p-3">
+          <div className="flex items-center justify-between gap-2 px-2 pb-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              Appearance
+            </span>
+            <ThemeToggle />
+          </div>
           <div className="px-2 pb-2">
             <p className="truncate text-sm font-medium">{userName}</p>
             <p className="text-xs text-muted-foreground">
@@ -127,26 +134,29 @@ export default function MerchantLayout() {
             </Button>
           </div>
 
-          <nav className="flex gap-1 overflow-x-auto px-2 pb-2">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  cn(
-                    "flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )
-                }
-              >
-                <item.icon />
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+          <div className="flex items-center gap-2 px-2 pb-2">
+            <nav className="flex flex-1 gap-1 overflow-x-auto">
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    )
+                  }
+                >
+                  <item.icon />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+            <ThemeToggle className="shrink-0" />
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">

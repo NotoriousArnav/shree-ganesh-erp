@@ -157,6 +157,18 @@ saved, so a merchant never has to visit the Categories screen first. Names are
 matched case-insensitively ("dairy" reuses "Dairy"). The same is available over
 the API as `categoryName` on product create/update.
 
+Barcode is optional — many items (loose grain, flowers, books) do not have one.
+When SKU is left empty on create, a readable one is generated from the product
+name and made unique within the shop (`BASMATI-RICE-5`, `BASMATI-RICE-5-2`).
+
+### Appearance
+
+The sun/moon/monitor switch appears in the shop sidebar, the mobile header and
+the sign-in pages. It offers **Light**, **Dark** and **System**; System follows
+the device setting and updates live when that changes. The choice is stored in
+`localStorage` (`mushak-theme`) and applied by a tiny inline script before the
+app loads, so there is no flash of the wrong theme.
+
 Roles:
 
 - **merchant** — everything above.

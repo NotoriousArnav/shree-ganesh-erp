@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 
 const roleLabels: Record<string, string> = {
@@ -17,7 +18,11 @@ export default function Home() {
   const isShop = role === "merchant" || role === "staff";
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-12 text-center">
+    <main className="relative flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-12 text-center">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
       <img
         src="/brand/shree-ganesh-erp.png"
         alt="Shree Ganesh ERP"

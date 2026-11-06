@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 
 type MerchantRow = {
@@ -104,6 +105,7 @@ export default function Admin() {
         </div>
 
         <div className="flex gap-2">
+          <ThemeToggle />
           <Button asChild variant="outline">
             <Link to="/">Home</Link>
           </Button>

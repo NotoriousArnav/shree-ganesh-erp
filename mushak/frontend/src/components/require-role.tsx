@@ -3,6 +3,8 @@ import { Navigate, useLocation } from "react-router";
 
 import { authClient } from "@/lib/auth-client";
 
+import ThemeToggle from "./theme-toggle";
+
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
   dev: "Dev",
@@ -37,7 +39,10 @@ export default function RequireRole({ roles, children }: Props) {
 
   if (!role || !roles.includes(role)) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+      <main className="relative flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
+        </div>
         <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
           403
         </p>

@@ -161,7 +161,7 @@ export default function Dashboard() {
                           className={cn(
                             "shrink-0 text-sm font-medium tabular-nums",
                             movement.quantity > 0
-                              ? "text-emerald-700"
+                              ? "text-emerald-700 dark:text-emerald-400"
                               : "text-destructive",
                           )}
                         >
@@ -201,7 +201,7 @@ function StatCard({
         <p
           className={cn(
             "text-2xl font-semibold tracking-tight tabular-nums",
-            tone === "warning" && "text-amber-700",
+            tone === "warning" && "text-amber-700 dark:text-amber-400",
           )}
         >
           {value}

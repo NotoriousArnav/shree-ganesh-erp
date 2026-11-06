@@ -3,9 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="Mushak — inventory management for small merchants by Shree Ganesh ERP" />
     <title>Mushak</title>
+    <script>
+      // Apply the saved theme before the bundle loads to avoid a light flash.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mushak-theme");
+          var theme =
+            stored === "light" || stored === "dark" ? stored : "system";
+          var dark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          root.classList.toggle("dark", dark);
+          root.style.colorScheme = dark ? "dark" : "light";
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute("content", dark ? "#09090b" : "#ffffff");
+        } catch (error) {
+          /* Storage can be unavailable; the app still renders in light mode. */
+        }
+      })();
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   </head>

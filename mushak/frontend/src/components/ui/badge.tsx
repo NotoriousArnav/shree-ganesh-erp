@@ -9,8 +9,10 @@ const variants: Record<BadgeVariant, string> = {
   secondary: "bg-secondary text-secondary-foreground",
   outline: "border border-border text-foreground",
   destructive: "bg-destructive text-destructive-foreground",
-  success: "bg-emerald-100 text-emerald-800",
-  warning: "bg-amber-100 text-amber-800",
+  success:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  warning:
+    "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
 };
 
 type BadgeProps = React.ComponentProps<"span"> & {

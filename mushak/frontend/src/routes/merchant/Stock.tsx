@@ -96,7 +96,7 @@ export default function Stock() {
                   className={cn(
                     "px-4 py-2.5 text-right font-medium tabular-nums",
                     movement.quantity > 0
-                      ? "text-emerald-700"
+                      ? "text-emerald-700 dark:text-emerald-400"
                       : "text-destructive",
                   )}
                 >

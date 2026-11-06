@@ -204,7 +204,7 @@ export default function Products() {
                       <span
                         className={cn(
                           "tabular-nums",
-                          low && "font-medium text-amber-700",
+                          low && "font-medium text-amber-700 dark:text-amber-400",
                         )}
                       >
                         {qty(product.stockQty)} {product.unit}

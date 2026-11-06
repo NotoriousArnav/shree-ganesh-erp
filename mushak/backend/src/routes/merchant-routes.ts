@@ -50,8 +50,42 @@ function parse<T>(schema: z.ZodType<T>, data: unknown, reply: FastifyReply) {
   return result.data;
 }
 
+/** Drizzle wraps driver errors, so the Postgres code lives on `cause`. */
+function rootPgError(error: unknown) {
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 3 && current; depth += 1) {
+    const candidate = current as {
+      code?: string;
+      constraint?: string;
+      constraint_name?: string;
+      cause?: unknown;
+    };
+    if (candidate.code) return candidate;
+    current = candidate.cause;
+  }
+
+  return null;
+}
+
 function isUniqueViolation(error: unknown) {
-  return (error as { code?: string } | null)?.code === "23505";
+  return rootPgError(error)?.code === "23505";
+}
+
+/** Names the field that actually clashed instead of blaming both. */
+function uniqueViolationMessage(error: unknown) {
+  const clash = rootPgError(error);
+  const constraint = clash?.constraint ?? clash?.constraint_name;
+
+  if (constraint === "products_merchant_sku_idx") {
+    return "That SKU is already used by another product";
+  }
+
+  if (constraint === "products_merchant_barcode_idx") {
+    return "That barcode is already used by another product";
+  }
+
+  return "That SKU or barcode is already used by another product";
 }
 
 function notFound(reply: FastifyReply) {
@@ -100,6 +134,43 @@ async function findOrCreateCategory(merchantId: string, rawName: string) {
     .limit(1);
 
   return fallback?.id ?? null;
+}
+
+/**
+ * Builds a readable SKU from the product name.
+ *
+ * "Basmati Rice 5 kg" becomes "BASMATI-RICE-5". Not derived from the barcode:
+ * many items (loose grain, flowers, books) have no barcode at all.
+ */
+function skuBase(name: string) {
+  const words = name
+    // \p{M} keeps Indic vowel signs, so "दूध" does not break into "द ध".
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const base = words.join("-").slice(0, 24).replace(/-+$/, "");
+  return base || "ITEM";
+}
+
+/** Picks the first free SKU for this merchant, e.g. RICE-5, RICE-5-2. */
+async function generateSku(merchantId: string, name: string) {
+  const base = skuBase(name);
+
+  for (let suffix = 1; suffix <= 999; suffix += 1) {
+    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
+    const [taken] = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(and(eq(products.merchantId, merchantId), eq(products.sku, candidate)))
+      .limit(1);
+
+    if (!taken) return candidate;
+  }
+
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 const optionalText = (max = 120) =>
@@ -498,6 +569,9 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
     let categoryId = input.categoryId ?? null;
 
+    // Readable SKUs are generated only when the merchant leaves the field blank.
+    const sku = input.sku ?? (await generateSku(merchantId, input.name));
+
     // `categoryName` wins so the product form can create a category inline.
     if (input.categoryName) {
       categoryId = await findOrCreateCategory(merchantId, input.categoryName);
@@ -518,7 +592,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
             merchantId,
             name: input.name,
             categoryId,
-            sku: input.sku,
+            sku,
             barcode: input.barcode,
             unit: input.unit,
             hsnCode: input.hsnCode,
@@ -548,9 +622,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       return reply.code(201).send(created);
     } catch (error) {
       if (isUniqueViolation(error)) {
-        return reply
-          .code(409)
-          .send({ error: "That SKU or barcode is already used by another product" });
+        return reply.code(409).send({ error: uniqueViolationMessage(error) });
       }
       throw error;
     }
@@ -609,9 +681,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         return updated;
       } catch (error) {
         if (isUniqueViolation(error)) {
-          return reply
-            .code(409)
-            .send({ error: "That SKU or barcode is already used by another product" });
+          return reply.code(409).send({ error: uniqueViolationMessage(error) });
         }
         throw error;
       }

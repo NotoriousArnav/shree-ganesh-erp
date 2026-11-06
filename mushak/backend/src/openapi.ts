@@ -215,7 +215,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       post: {
         summary: "Create a product",
         description:
-          "Requires the merchant role. Opening stock is recorded as an adjustment movement. Send categoryName to reuse or create a category inline.",
+          "Requires the merchant role. Opening stock is recorded as an adjustment movement. Send categoryName to reuse or create a category inline. When sku is empty a readable one is generated from the name; barcode is optional.",
         security: [{ sessionCookie: [] }],
         responses: {
           "201": { description: "Created" },

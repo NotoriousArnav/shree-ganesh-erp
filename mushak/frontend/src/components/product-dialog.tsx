@@ -145,7 +145,7 @@ export default function ProductDialog({
               ))}
             </datalist>
             <p className="text-xs text-muted-foreground">
-              Pick an existing one or type a new name; it is created on save.
+              Existing or new — created on save.
             </p>
           </div>
 
@@ -172,20 +172,24 @@ export default function ProductDialog({
               id="product-sku"
               value={sku}
               onChange={(event) => setSku(event.target.value)}
-              placeholder="RICE-5"
+              placeholder={isNew ? "Auto from name" : "RICE-5"}
             />
+            {isNew ? (
+              <p className="text-xs text-muted-foreground">
+                Blank? Generated from the name.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="product-barcode">Barcode</Label>
+            <Label htmlFor="product-barcode">Barcode (optional)</Label>
             <Input
               id="product-barcode"
               value={barcode}
               onChange={(event) => setBarcode(event.target.value)}
-              placeholder="8901234567890"
+              placeholder="Not needed for every item"
             />
-          </div>
-        </div>
+          </div>        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">

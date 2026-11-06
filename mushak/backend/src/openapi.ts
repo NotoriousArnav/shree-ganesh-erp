@@ -142,7 +142,8 @@ export const openapiSpec: OpenAPIV3.Document = {
     "/api/merchant/profile": {
       get: {
         summary: "Signed-in merchant and user",
-        description: "Requires merchant or staff. The merchant comes from the session.",
+        description:
+          "Requires merchant or staff. The merchant comes from the session. user.permissions lists the effective staff permissions; merchants always have all of them.",
         security: [{ sessionCookie: [] }],
         responses: {
           "200": { description: "Merchant and user" },
@@ -172,7 +173,8 @@ export const openapiSpec: OpenAPIV3.Document = {
       },
       post: {
         summary: "Create a category",
-        description: "Requires the merchant role.",
+        description:
+          "Requires the merchant role or a staff account with the categories permission.",
         security: [{ sessionCookie: [] }],
         responses: {
           "201": { description: "Created" },
@@ -184,7 +186,8 @@ export const openapiSpec: OpenAPIV3.Document = {
     "/api/merchant/categories/{id}": {
       patch: {
         summary: "Rename a category",
-        description: "Requires the merchant role.",
+        description:
+          "Requires the merchant role or a staff account with the categories permission.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -195,7 +198,8 @@ export const openapiSpec: OpenAPIV3.Document = {
       },
       delete: {
         summary: "Delete a category",
-        description: "Products keep existing and become uncategorised.",
+        description:
+          "Requires the merchant role or the categories permission. Products keep existing and become uncategorised.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -215,7 +219,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       post: {
         summary: "Create a product",
         description:
-          "Requires the merchant role. Opening stock is recorded as an adjustment movement. Send categoryName to reuse or create a category inline. When sku is empty a readable one is generated from the name; barcode is optional.",
+          "Requires the merchant role or the catalogue permission. Opening stock is recorded as an adjustment movement and additionally needs the stock permission. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
         security: [{ sessionCookie: [] }],
         responses: {
           "201": { description: "Created" },
@@ -228,7 +232,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       patch: {
         summary: "Update a product",
         description:
-          "Requires the merchant role. Stock is not editable here; use the stock endpoint. categoryName creates or reuses a category; an empty value clears it.",
+          "Requires the merchant role or the catalogue permission. Stock is not editable here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -240,7 +244,8 @@ export const openapiSpec: OpenAPIV3.Document = {
       },
       delete: {
         summary: "Archive a product",
-        description: "Soft delete: sets isActive=false and keeps stock history.",
+        description:
+          "Soft delete: sets isActive=false and keeps stock history. Requires the merchant role or the catalogue permission.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -253,7 +258,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       post: {
         summary: "Move stock",
         description:
-          "Types: purchase, sale, return_in, return_out, damage, adjustment, transfer_in, transfer_out. Quantity is positive; the type decides the sign. Adjustment requires direction=in|out.",
+          "Requires the merchant role or a staff account with the stock permission. Types: purchase, sale, return_in, return_out, damage, adjustment, transfer_in, transfer_out. Quantity is positive; the type decides the sign. Adjustment requires direction=in|out.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -280,6 +285,61 @@ export const openapiSpec: OpenAPIV3.Document = {
         description: "Query: limit (1-200, default 50).",
         security: [{ sessionCookie: [] }],
         responses: { "200": { description: "Movements with product names" } },
+      },
+    },
+    "/api/merchant/staff": {
+      get: {
+        summary: "List staff",
+        description: "Requires the merchant role. Returns staff for the merchant on the session.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "200": { description: "Staff accounts with permissions and active status" },
+          "401": { description: "Not signed in" },
+          "403": { description: "Not the shop owner" },
+        },
+      },
+      post: {
+        summary: "Create a staff account",
+        description:
+          "Requires the merchant role. Password must be 8-128 characters. Permissions are stock, catalogue and categories; the default is stock only.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body" },
+          "403": { description: "Not the shop owner" },
+          "409": { description: "Email or phone already in use" },
+        },
+      },
+    },
+    "/api/merchant/staff/{id}": {
+      patch: {
+        summary: "Update staff details or access",
+        description:
+          "Requires the merchant role. Send name, phoneNumber, permissions or active. active=false deactivates the account, signs out every device and blocks sign-in.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Updated" },
+          "400": { description: "Invalid body" },
+          "403": { description: "Not the shop owner" },
+          "404": { description: "Not found for this shop" },
+          "409": { description: "Phone already in use" },
+        },
+      },
+    },
+    "/api/merchant/staff/{id}/password": {
+      post: {
+        summary: "Reset a staff password",
+        description:
+          "Requires the merchant role. The account is signed out everywhere after the change.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Password changed" },
+          "400": { description: "Invalid body" },
+          "403": { description: "Not the shop owner" },
+          "404": { description: "Not found for this shop" },
+        },
       },
     },
     "/mcp": {

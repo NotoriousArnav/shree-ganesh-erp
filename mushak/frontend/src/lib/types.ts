@@ -5,6 +5,25 @@ export type Category = {
   productCount: number;
 };
 
+/** Mirrors staff_permission values from the backend. */
+export const staffPermissionValues = [
+  "stock",
+  "catalogue",
+  "categories",
+] as const;
+
+export type StaffPermission = (typeof staffPermissionValues)[number];
+
+export type StaffMember = {
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber: string | null;
+  permissions: StaffPermission[];
+  active: boolean;
+  createdAt: string;
+};
+
 export type Product = {
   id: string;
   merchantId: string;
@@ -50,7 +69,12 @@ export type Merchant = {
 
 export type Profile = {
   merchant: Merchant | null;
-  user: { id: string; name: string; role: string };
+  user: {
+    id: string;
+    name: string;
+    role: string;
+    permissions: StaffPermission[];
+  };
 };
 
 export type DashboardData = {

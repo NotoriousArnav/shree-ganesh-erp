@@ -9,15 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { api, errorMessage } from "@/lib/api";
-import { authClient } from "@/lib/auth-client";
 import { money, qty } from "@/lib/format";
+import { usePermissions } from "@/lib/permissions";
 import type { Category, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function Products() {
   const [searchParams] = useSearchParams();
-  const { data: session } = authClient.useSession();
-  const canEdit = session?.user.role === "merchant";
+  const { can } = usePermissions();
+  const canEdit = can("catalogue");
+  const canStock = can("stock");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,7 +103,9 @@ export default function Products() {
         description={
           canEdit
             ? "Catalogue, prices and stock for this shop."
-            : "Staff can view products and move stock. Prices and the catalogue are merchant-only."
+            : canStock
+              ? "You can view products and move stock. The catalogue is managed by the shop owner."
+              : "You can view the catalogue. Ask the shop owner for stock or catalogue access."
         }
         actions={
           canEdit ? (
@@ -223,7 +226,7 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
-                      {product.isActive ? (
+                      {canStock && product.isActive ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -292,6 +295,8 @@ export default function Products() {
           key={editing === "new" ? "new" : editing.id}
           product={editing === "new" ? null : editing}
           categories={categories}
+          canCreateCategories={can("categories")}
+          canSetOpeningStock={canStock}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);

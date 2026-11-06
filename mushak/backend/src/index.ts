@@ -11,6 +11,7 @@ import { openapiSpec } from "./openapi.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerMerchantRoutes } from "./routes/merchant-routes.js";
+import { registerStaffRoutes } from "./routes/staff-routes.js";
 
 const app = Fastify({
   logger: true,
@@ -45,6 +46,7 @@ app.get("/openapi.json", async () => openapiSpec);
 await registerAuthRoutes(app);
 await registerAdminRoutes(app);
 await registerMerchantRoutes(app);
+await registerStaffRoutes(app);
 
 app.post("/mcp", async (req, reply) => {
   const transport = new StreamableHTTPServerTransport({

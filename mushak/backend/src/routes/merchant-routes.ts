@@ -21,7 +21,11 @@ import {
   stockMovements,
   stockMovementType,
 } from "../db/schema.js";
-import { requireRole } from "../http/auth-guard.js";
+import { requireMerchant, requirePermission, can } from "../http/auth-guard.js";
+import {
+  isUniqueViolation,
+  uniqueConstraint,
+} from "../http/pg-errors.js";
 
 /**
  * Merchant-side inventory API.
@@ -31,12 +35,8 @@ import { requireRole } from "../http/auth-guard.js";
  * /api/admin instead.
  */
 
-type ScopedRequest = FastifyRequest & {
-  authSession: NonNullable<FastifyRequest["authSession"]>;
-};
-
 function merchantIdOf(request: FastifyRequest) {
-  return (request as ScopedRequest).authSession.user.merchantId!;
+  return request.merchantAccess!.merchantId;
 }
 
 function parse<T>(schema: z.ZodType<T>, data: unknown, reply: FastifyReply) {
@@ -50,32 +50,9 @@ function parse<T>(schema: z.ZodType<T>, data: unknown, reply: FastifyReply) {
   return result.data;
 }
 
-/** Drizzle wraps driver errors, so the Postgres code lives on `cause`. */
-function rootPgError(error: unknown) {
-  let current: unknown = error;
-
-  for (let depth = 0; depth < 3 && current; depth += 1) {
-    const candidate = current as {
-      code?: string;
-      constraint?: string;
-      constraint_name?: string;
-      cause?: unknown;
-    };
-    if (candidate.code) return candidate;
-    current = candidate.cause;
-  }
-
-  return null;
-}
-
-function isUniqueViolation(error: unknown) {
-  return rootPgError(error)?.code === "23505";
-}
-
 /** Names the field that actually clashed instead of blaming both. */
 function uniqueViolationMessage(error: unknown) {
-  const clash = rootPgError(error);
-  const constraint = clash?.constraint ?? clash?.constraint_name;
+  const constraint = uniqueConstraint(error);
 
   if (constraint === "products_merchant_sku_idx") {
     return "That SKU is already used by another product";
@@ -93,15 +70,20 @@ function notFound(reply: FastifyReply) {
 }
 
 /**
- * Finds a category by name or creates it.
+ * Resolves a free-text category name for the product form.
  *
- * Used by the product form, which lets a merchant type a new category instead
- * of leaving the dialog to create one first. Matching is case-insensitive so
- * "dairy" reuses "Dairy".
+ * An existing name is always reused, so a catalogue-only staff member can
+ * still file a product under a category the merchant already made. Creating a
+ * new category needs the categories permission; when it is missing the caller
+ * gets `denied: true` instead of a silent side effect.
  */
-async function findOrCreateCategory(merchantId: string, rawName: string) {
+async function resolveCategoryName(
+  merchantId: string,
+  rawName: string,
+  allowCreate: boolean,
+): Promise<{ id: string | null; denied: boolean }> {
   const name = rawName.trim();
-  if (!name) return null;
+  if (!name) return { id: null, denied: false };
 
   const [existing] = await db
     .select({ id: categories.id })
@@ -114,7 +96,8 @@ async function findOrCreateCategory(merchantId: string, rawName: string) {
     )
     .limit(1);
 
-  if (existing) return existing.id;
+  if (existing) return { id: existing.id, denied: false };
+  if (!allowCreate) return { id: null, denied: true };
 
   const [created] = await db
     .insert(categories)
@@ -122,7 +105,7 @@ async function findOrCreateCategory(merchantId: string, rawName: string) {
     .onConflictDoNothing({ target: [categories.merchantId, categories.name] })
     .returning({ id: categories.id });
 
-  if (created) return created.id;
+  if (created) return { id: created.id, denied: false };
 
   // Lost a race with another insert; read it back.
   const [fallback] = await db
@@ -133,7 +116,7 @@ async function findOrCreateCategory(merchantId: string, rawName: string) {
     )
     .limit(1);
 
-  return fallback?.id ?? null;
+  return { id: fallback?.id ?? null, denied: false };
 }
 
 /**
@@ -268,9 +251,12 @@ function signedQuantity(input: z.infer<typeof stockInput>) {
 }
 
 export async function registerMerchantRoutes(app: FastifyInstance) {
-  const scoped = requireRole("merchant", "staff");
-  // Staff can see stock and move it, but not change catalogue or prices.
-  const owner = requireRole("merchant");
+  // Reading products, categories and the dashboard is open to all shop users.
+  const scoped = requireMerchant();
+  // Staff permissions are checked per action; merchants always pass.
+  const owner = requirePermission("catalogue");
+  const categoryEditor = requirePermission("categories");
+  const stockMover = requirePermission("stock");
 
   app.get("/api/merchant/profile", { preHandler: scoped }, async (request) => {
     const merchantId = merchantIdOf(request);
@@ -285,7 +271,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       user: {
         id: request.authSession!.user.id,
         name: request.authSession!.user.name,
-        role: request.authSession!.user.role,
+        role: request.merchantAccess!.role,
+        permissions: request.merchantAccess!.permissions,
       },
     };
   });
@@ -421,7 +408,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       .orderBy(asc(categories.name));
   });
 
-  app.post("/api/merchant/categories", { preHandler: owner }, async (request, reply) => {
+  app.post("/api/merchant/categories", { preHandler: categoryEditor }, async (request, reply) => {
     const merchantId = merchantIdOf(request);
     const input = parse(categoryInput, request.body, reply);
     if (!input) return;
@@ -456,7 +443,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     "/api/merchant/categories/:id",
-    { preHandler: owner },
+    { preHandler: categoryEditor },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
       const input = parse(categoryInput.partial(), request.body, reply);
@@ -497,7 +484,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     "/api/merchant/categories/:id",
-    { preHandler: owner },
+    { preHandler: categoryEditor },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
 
@@ -567,6 +554,13 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     const input = parse(productCreateInput, request.body, reply);
     if (!input) return;
 
+    // Opening stock writes a movement, so it needs the stock permission.
+    if (input.stockQty > 0 && !can(request, "stock")) {
+      return reply
+        .code(403)
+        .send({ error: "You do not have permission to add opening stock." });
+    }
+
     let categoryId = input.categoryId ?? null;
 
     // Readable SKUs are generated only when the merchant leaves the field blank.
@@ -574,7 +568,18 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
     // `categoryName` wins so the product form can create a category inline.
     if (input.categoryName) {
-      categoryId = await findOrCreateCategory(merchantId, input.categoryName);
+      const resolved = await resolveCategoryName(
+        merchantId,
+        input.categoryName,
+        can(request, "categories"),
+      );
+      if (resolved.denied) {
+        return reply.code(403).send({
+          error:
+            "That category does not exist and you do not have permission to create one.",
+        });
+      }
+      categoryId = resolved.id;
     } else if (categoryId) {
       const [category] = await db
         .select({ id: categories.id })
@@ -653,10 +658,23 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       delete patch.categoryName;
 
       if (input.categoryName !== undefined) {
-        // An empty name clears the category, otherwise create or reuse it.
-        patch.categoryId = input.categoryName
-          ? await findOrCreateCategory(merchantId, input.categoryName)
-          : null;
+        // An empty name clears the category, otherwise reuse or create it.
+        if (input.categoryName) {
+          const resolved = await resolveCategoryName(
+            merchantId,
+            input.categoryName,
+            can(request, "categories"),
+          );
+          if (resolved.denied) {
+            return reply.code(403).send({
+              error:
+                "That category does not exist and you do not have permission to create one.",
+            });
+          }
+          patch.categoryId = resolved.id;
+        } else {
+          patch.categoryId = null;
+        }
       } else if (input.categoryId) {
         const [category] = await db
           .select({ id: categories.id })
@@ -710,7 +728,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     "/api/merchant/products/:id/stock",
-    { preHandler: scoped },
+    { preHandler: stockMover },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
       const input = parse(stockInput, request.body, reply);
@@ -774,7 +792,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/api/merchant/products/:id/movements",
-    { preHandler: scoped },
+    { preHandler: stockMover },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
 
@@ -802,7 +820,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get("/api/merchant/movements", { preHandler: scoped }, async (request) => {
+  app.get("/api/merchant/movements", { preHandler: stockMover }, async (request) => {
     const merchantId = merchantIdOf(request);
     const query = request.query as { limit?: string };
     const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);

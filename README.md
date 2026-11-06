@@ -150,6 +150,7 @@ Merchant and staff accounts land on `/app` after signing in:
 | Products | `/app/products` | Search, category and low-stock filters, add/edit/archive, stock adjustments |
 | Stock | `/app/stock` | Full stock-movement history |
 | Categories | `/app/categories` | Create, rename and delete categories |
+| Staff | `/app/staff` | Create counter logins, choose access, reset passwords, deactivate |
 
 The category field on the product form accepts an existing name or a new one.
 Typing a name that does not exist creates the category when the product is
@@ -169,14 +170,23 @@ the device setting and updates live when that changes. The choice is stored in
 `localStorage` (`mushak-theme`) and applied by a tiny inline script before the
 app loads, so there is no flash of the wrong theme.
 
-Roles:
+Roles and staff access:
 
-- **merchant** — everything above.
-- **staff** — can view products and move stock; cannot change prices, the
-  catalogue or categories.
+- **merchant** — owns the shop and always has every permission.
+- **staff** — signs in with the same screens, but only does what the owner
+  allows. Staff always see products and the dashboard. The owner can tick:
+  - **stock** — record purchases, sales, damage and adjustments
+  - **catalogue** — add, edit and archive products, prices, SKU and GST
+  - **categories** — create, rename and delete categories
+
+Nothing ticked means view-only. The Staff screen is merchant-only, and staff
+cannot grant themselves more access. Permission changes take effect on the next
+request, even if the staff member is already signed in. Deactivating an account
+signs it out everywhere and blocks sign-in until it is reactivated.
 
 Every merchant API call is scoped by `merchants.id` from the session; a
-product id from another shop returns 404.
+product id from another shop returns 404. Permissions are checked from the
+database on each request, so `users.staff_permissions` is the source of truth.
 
 ### Demo shop
 
@@ -209,7 +219,14 @@ All routes require a merchant or staff session.
 | `PATCH/DELETE` | `/api/merchant/products/:id` | Update, archive (soft delete) |
 | `POST` | `/api/merchant/products/:id/stock` | Stock movement |
 | `GET` | `/api/merchant/products/:id/movements` | History for one product |
-| `GET` | `/api/merchant/movements` | Recent movements, `?limit=` 1-200 |
+| `GET` | `/api/merchant/movements` | Recent movements, `?limit=` 1-200 (stock permission) |
+| `GET/POST` | `/api/merchant/staff` | List staff, create a staff account (merchant only) |
+| `PATCH` | `/api/merchant/staff/:id` | Name, phone, permissions or `active` (merchant only) |
+| `POST` | `/api/merchant/staff/:id/password` | Reset a staff password (merchant only) |
+
+Product, category and stock writes also require the matching staff permission.
+Opening stock on a new product needs both `catalogue` and `stock`; creating a
+new category inline needs `categories` (an existing one can always be reused).
 
 Stock movements take a positive `quantity`; the type decides the sign:
 `purchase`/`return_in`/`transfer_in` add, `sale`/`return_out`/`damage`/
@@ -228,4 +245,4 @@ stock update plus the movement row happen in one transaction.
 ## Current phase
 
 Phase 2 — Inventory schema, database connection, authentication, and the
-merchant inventory app (products, stock, categories, dashboard).
+merchant inventory app (products, stock, categories, dashboard, staff access).

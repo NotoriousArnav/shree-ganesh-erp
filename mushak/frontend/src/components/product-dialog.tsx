@@ -25,6 +25,10 @@ const units = [
 type Props = {
   product: Product | null;
   categories: Category[];
+  /** Staff without the categories permission may only pick an existing one. */
+  canCreateCategories: boolean;
+  /** Opening stock is a stock movement, so it needs the stock permission. */
+  canSetOpeningStock: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -32,6 +36,8 @@ type Props = {
 export default function ProductDialog({
   product,
   categories,
+  canCreateCategories,
+  canSetOpeningStock,
   onClose,
   onSaved,
 }: Props) {
@@ -87,7 +93,10 @@ export default function ProductDialog({
       if (isNew) {
         await api<Product>("/api/merchant/products", {
           method: "POST",
-          body: { ...payload, stockQty: Number(openingStock) || 0 },
+          body: {
+            ...payload,
+            stockQty: canSetOpeningStock ? Number(openingStock) || 0 : 0,
+          },
         });
       } else {
         await api<Product>(`/api/merchant/products/${product.id}`, {
@@ -131,22 +140,44 @@ export default function ProductDialog({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="product-category">Category</Label>
-            <Input
-              id="product-category"
-              list="product-category-options"
-              value={categoryName}
-              onChange={(event) => setCategoryName(event.target.value)}
-              placeholder="Dairy, Snacks…"
-              autoComplete="off"
-            />
-            <datalist id="product-category-options">
-              {categories.map((category) => (
-                <option key={category.id} value={category.name} />
-              ))}
-            </datalist>
-            <p className="text-xs text-muted-foreground">
-              Existing or new — created on save.
-            </p>
+            {canCreateCategories ? (
+              <>
+                <Input
+                  id="product-category"
+                  list="product-category-options"
+                  value={categoryName}
+                  onChange={(event) => setCategoryName(event.target.value)}
+                  placeholder="Dairy, Snacks…"
+                  autoComplete="off"
+                />
+                <datalist id="product-category-options">
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-muted-foreground">
+                  Existing or new — created on save.
+                </p>
+              </>
+            ) : (
+              <>
+                <Select
+                  id="product-category"
+                  value={categoryName}
+                  onChange={(event) => setCategoryName(event.target.value)}
+                >
+                  <option value="">No category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Ask the shop owner to add a new category.
+                </p>
+              </>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -262,7 +293,7 @@ export default function ProductDialog({
             </p>
           </div>
 
-          {isNew ? (
+          {isNew && canSetOpeningStock ? (
             <div className="space-y-1.5">
               <Label htmlFor="product-opening">Opening stock</Label>
               <Input

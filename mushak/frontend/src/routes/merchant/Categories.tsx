@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api, errorMessage } from "@/lib/api";
-import { authClient } from "@/lib/auth-client";
+import { usePermissions } from "@/lib/permissions";
 import type { Category } from "@/lib/types";
 
 export default function Categories() {
-  const { data: session } = authClient.useSession();
-  const canEdit = session?.user.role === "merchant";
+  const { can } = usePermissions();
+  const canEdit = can("categories");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");

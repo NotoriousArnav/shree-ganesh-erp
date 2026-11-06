@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, errorMessage } from "@/lib/api";
 import { dateTime, money, movementLabels, qty } from "@/lib/format";
+import { usePermissions } from "@/lib/permissions";
 import type { Movement } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function Stock() {
+  const { profile, can } = usePermissions();
+  const canView = can("stock");
   const [movements, setMovements] = useState<Movement[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -25,7 +28,9 @@ export default function Stock() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    if (canView) load();
+  }, [canView, load]);
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -38,6 +43,22 @@ export default function Stock() {
           .includes(needle),
     );
   }, [movements, filter]);
+
+  if (!canView) {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title="Stock movements"
+          description="Every change to on-hand stock, newest first."
+        />
+        <p className="rounded-md border bg-background px-4 py-8 text-center text-sm text-muted-foreground">
+          {profile
+            ? "You do not have permission to view stock. Ask the shop owner."
+            : "Loading…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

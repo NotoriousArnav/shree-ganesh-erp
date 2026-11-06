@@ -166,6 +166,8 @@ export const auth = betterAuth({
       defaultRole: "staff",
       adminRoles: ["super_admin", "dev"],
       impersonationSessionDuration: 60 * 60,
+      bannedUserMessage:
+        "This account has been deactivated. Ask your administrator or shop owner to reactivate it.",
     }),
     phoneNumber({
       // OTP delivery is not configured. Email/password and phone/password both

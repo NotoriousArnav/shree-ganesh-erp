@@ -186,6 +186,25 @@ export const userRoleValues = [
 
 export type UserRole = (typeof userRoleValues)[number];
 
+/**
+ * What a staff account may change.
+ *
+ * Merchants implicitly have every permission; this list only limits staff.
+ * Reading products, categories and the dashboard is always allowed so staff
+ * can look things up at the counter.
+ *
+ * - stock:     record stock movements
+ * - catalogue: add, edit, archive and price products
+ * - categories: create, rename and delete categories
+ */
+export const staffPermissionValues = [
+  "stock",
+  "catalogue",
+  "categories",
+] as const;
+
+export type StaffPermission = (typeof staffPermissionValues)[number];
+
 export const users = pgTable(
   "users",
   {
@@ -204,6 +223,14 @@ export const users = pgTable(
     merchantId: uuid("merchant_id").references(() => merchants.id, {
       onDelete: "cascade",
     }),
+    /**
+     * Staff-only limits. Merchants ignore this column and always have all
+     * permissions. Existing staff default to stock access.
+     */
+    staffPermissions: jsonb("staff_permissions")
+      .$type<StaffPermission[]>()
+      .default(sql`'["stock"]'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

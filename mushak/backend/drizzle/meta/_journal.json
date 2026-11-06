@@ -15,6 +15,13 @@
       "when": 1793955115740,
       "tag": "0001_tiny_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793970746699,
+      "tag": "0002_shocking_zemo",
+      "breakpoints": true
     }
   ]
 }

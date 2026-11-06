@@ -5,14 +5,34 @@ import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
 import { api, errorMessage } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import type { Profile } from "@/lib/types";
+import { MerchantProfileProvider } from "@/lib/merchant-context";
+import {
+  staffPermissionValues,
+  type Profile,
+  type StaffPermission,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const navigation = [
+type NavigationItem = {
+  to: string;
+  label: string;
+  end?: boolean;
+  icon: () => React.ReactElement;
+  permission?: StaffPermission;
+  merchantOnly?: boolean;
+};
+
+const navigation: NavigationItem[] = [
   { to: "/app", label: "Dashboard", end: true, icon: DashboardIcon },
   { to: "/app/products", label: "Products", icon: BoxIcon },
-  { to: "/app/stock", label: "Stock", icon: ArrowsIcon },
-  { to: "/app/categories", label: "Categories", icon: TagIcon },
+  { to: "/app/stock", label: "Stock", icon: ArrowsIcon, permission: "stock" },
+  {
+    to: "/app/categories",
+    label: "Categories",
+    icon: TagIcon,
+    permission: "categories",
+  },
+  { to: "/app/staff", label: "Staff", icon: UsersIcon, merchantOnly: true },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -47,6 +67,15 @@ export default function MerchantLayout() {
   const shopName = profile?.merchant?.name ?? "Your shop";
   const userName = profile?.user.name ?? session?.user.name ?? "Account";
   const role = profile?.user.role ?? session?.user.role ?? "";
+  const permissions: StaffPermission[] =
+    profile?.user.permissions ??
+    (role === "merchant" ? [...staffPermissionValues] : []);
+
+  const visibleNavigation = navigation.filter((item) => {
+    if (item.merchantOnly) return role === "merchant";
+    if (item.permission) return permissions.includes(item.permission);
+    return true;
+  });
 
   async function signOut() {
     await authClient.signOut();
@@ -69,7 +98,7 @@ export default function MerchantLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navigation.map((item) => (
+          {visibleNavigation.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -136,7 +165,7 @@ export default function MerchantLayout() {
 
           <div className="flex items-center gap-2 px-2 pb-2">
             <nav className="flex flex-1 gap-1 overflow-x-auto">
-              {navigation.map((item) => (
+              {visibleNavigation.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -165,7 +194,9 @@ export default function MerchantLayout() {
               {error}
             </p>
           ) : null}
-          <Outlet />
+          <MerchantProfileProvider profile={profile}>
+            <Outlet />
+          </MerchantProfileProvider>
         </main>
       </div>
     </div>
@@ -225,6 +256,17 @@ function TagIcon() {
     <Icon>
       <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
       <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </Icon>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <Icon>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </Icon>
   );
 }

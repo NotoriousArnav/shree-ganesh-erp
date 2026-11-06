@@ -44,7 +44,7 @@ export default function RequireRole({ roles, children }: Props) {
         <h1 className="text-2xl font-semibold">You do not have access</h1>
         <p className="text-sm text-muted-foreground">
           Your role is {role ? (roleLabels[role] ?? role) : "unknown"}. This
-          page is limited to platform roles.
+          page is limited to a different role.
         </p>
       </main>
     );

@@ -44,7 +44,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const redirectTo = (location.state as { from?: string } | null)?.from;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,7 +67,11 @@ export default function Login() {
         return;
       }
 
-      navigate(from, { replace: true });
+      const role = result.data?.user.role;
+      const home =
+        role === "super_admin" || role === "dev" ? "/admin" : "/app";
+
+      navigate(redirectTo ?? home, { replace: true });
     } catch {
       setError("Could not reach the server. Try again.");
     } finally {

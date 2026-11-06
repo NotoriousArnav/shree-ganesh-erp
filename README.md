@@ -131,6 +131,65 @@ is `console`. The full browser flow is:
 To add SMTP, extend `AbstractMailer` with a transport that implements
 `deliver()` and select it in `getMailer()`.
 
+## Merchant app
+
+Merchant and staff accounts land on `/app` after signing in:
+
+| Screen | Path | What it does |
+| --- | --- | --- |
+| Dashboard | `/app` | Product and category counts, stock value, today's movements, low-stock list, recent activity |
+| Products | `/app/products` | Search, category and low-stock filters, add/edit/archive, stock adjustments |
+| Stock | `/app/stock` | Full stock-movement history |
+| Categories | `/app/categories` | Create, rename and delete categories |
+
+Roles:
+
+- **merchant** — everything above.
+- **staff** — can view products and move stock; cannot change prices, the
+  catalogue or categories.
+
+Every merchant API call is scoped by `merchants.id` from the session; a
+product id from another shop returns 404.
+
+### Demo shop
+
+```bash
+npm run seed:demo
+```
+
+Creates the `Ganesh Kirana` merchant, five categories, ten products with opening
+stock, and two logins:
+
+| Email | Phone | Password | Role |
+| --- | --- | --- | --- |
+| `merchant@mushak.local` | `+919876543210` | `merchant-pass-123` | merchant |
+| `staff@mushak.local` | `+919876543211` | `staff-pass-123` | staff |
+
+The shop data is fictional. The script is idempotent: existing merchant,
+accounts, categories and SKUs are left alone.
+
+### Merchant API
+
+All routes require a merchant or staff session.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/merchant/profile` | Merchant row and signed-in user |
+| `GET` | `/api/merchant/dashboard` | Counts, stock value, today, low stock, recent movements |
+| `GET/POST` | `/api/merchant/categories` | List with product counts, create |
+| `PATCH/DELETE` | `/api/merchant/categories/:id` | Rename, delete (products become uncategorised) |
+| `GET/POST` | `/api/merchant/products` | Filters: `q`, `categoryId`, `lowStock`, `includeInactive` |
+| `PATCH/DELETE` | `/api/merchant/products/:id` | Update, archive (soft delete) |
+| `POST` | `/api/merchant/products/:id/stock` | Stock movement |
+| `GET` | `/api/merchant/products/:id/movements` | History for one product |
+| `GET` | `/api/merchant/movements` | Recent movements, `?limit=` 1-200 |
+
+Stock movements take a positive `quantity`; the type decides the sign:
+`purchase`/`return_in`/`transfer_in` add, `sale`/`return_out`/`damage`/
+`transfer_out` subtract, and `adjustment` needs `direction=in|out`. A movement
+that would take stock below zero is rejected with a readable error, and the
+stock update plus the movement row happen in one transaction.
+
 ## Inventory schema (Phase 2)
 
 - `merchants` — shop profile (name, GSTIN, currency, address)
@@ -141,4 +200,5 @@ To add SMTP, extend `AbstractMailer` with a transport that implements
 
 ## Current phase
 
-Phase 2 — Inventory schema, database connection, and authentication.
+Phase 2 — Inventory schema, database connection, authentication, and the
+merchant inventory app (products, stock, categories, dashboard).

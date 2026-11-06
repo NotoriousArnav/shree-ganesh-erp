@@ -14,6 +14,7 @@ export default function Home() {
   const { data, isPending } = authClient.useSession();
   const role = data?.user.role;
   const isPlatform = role === "super_admin" || role === "dev";
+  const isShop = role === "merchant" || role === "staff";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-12 text-center">
@@ -54,6 +55,11 @@ export default function Home() {
             {isPlatform ? (
               <Button asChild>
                 <Link to="/admin">Open admin</Link>
+              </Button>
+            ) : null}
+            {isShop ? (
+              <Button asChild>
+                <Link to="/app">Open shop</Link>
               </Button>
             ) : null}
             <Button

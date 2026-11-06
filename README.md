@@ -123,8 +123,13 @@ MAIL_DIR=/tmp/mushak-mail
 
 Password-reset and email-verification hooks already use the mailer, so
 requesting a reset prints the link instead of sending it while `MAIL_DRIVER`
-is `console`. To add SMTP, extend `AbstractMailer` with a transport that
-implements `deliver()` and select it in `getMailer()`.
+is `console`. The full browser flow is:
+
+`/login` → **Forgot password?** → `/forgot-password` → emailed link →
+`/reset-password` → sign in with the new password.
+
+To add SMTP, extend `AbstractMailer` with a transport that implements
+`deliver()` and select it in `getMailer()`.
 
 ## Inventory schema (Phase 2)
 

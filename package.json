@@ -1,0 +1,16 @@
+{
+  "name": "ganesha-merchant-assistive-software",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "mushak/frontend",
+    "mushak/backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev -w mushak/frontend",
+    "dev:backend": "npm run dev -w mushak/backend",
+    "build:frontend": "npm run build -w mushak/frontend",
+    "build:backend": "npm run build -w mushak/backend",
+    "build": "npm run build -w mushak/frontend && npm run build -w mushak/backend"
+  }
+}

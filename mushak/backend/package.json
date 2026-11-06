@@ -6,16 +6,27 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^6.0.0",
     "@modelcontextprotocol/sdk": "^1.12.4",
-    "fastify": "^5.0.0"
+    "dotenv": "^18.0.9",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.0.0",
+    "postgres": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.11",
     "tsx": "^4.16.0",
     "typescript": "^5.5.3"
   }

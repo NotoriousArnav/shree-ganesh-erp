@@ -13,6 +13,13 @@
     "build:backend": "npm run build -w mushak/backend",
     "build": "npm run build -w mushak/frontend && npm run build -w mushak/backend",
     "dev:mushak": "npm run dev --workspaces",
-    "build:mushak": "npm run build --workspaces"
+    "build:mushak": "npm run build --workspaces",
+    "db:up": "npm run db:up -w mushak/backend",
+    "db:down": "npm run db:down -w mushak/backend",
+    "db:migrate": "npm run db:migrate -w mushak/backend",
+    "db:studio": "npm run db:studio -w mushak/backend"
+  },
+  "devDependencies": {
+    "drizzle-orm": "^0.45.4"
   }
 }

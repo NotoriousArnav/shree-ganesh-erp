@@ -15,5 +15,38 @@ export const openapiSpec = {
         },
       },
     },
+    "/health/db": {
+      get: {
+        summary: "Database health check",
+        responses: {
+          "200": {
+            description: "Database is reachable",
+          },
+          "503": {
+            description: "Database is unreachable",
+          },
+        },
+      },
+    },
+    "/openapi.json": {
+      get: {
+        summary: "OpenAPI document",
+        responses: {
+          "200": {
+            description: "OpenAPI specification",
+          },
+        },
+      },
+    },
+    "/mcp": {
+      post: {
+        summary: "Model Context Protocol endpoint",
+        responses: {
+          "200": {
+            description: "MCP response",
+          },
+        },
+      },
+    },
   },
 };

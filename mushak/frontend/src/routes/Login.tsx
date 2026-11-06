@@ -14,6 +14,28 @@ function normalizePhone(value: string) {
   return digits;
 }
 
+/**
+ * Turns a Better Auth error into something a shopkeeper can act on.
+ *
+ * The dev proxy answers with a 5xx when the backend is down, which used to
+ * surface as "Invalid credentials" and send people chasing the password.
+ */
+function signInError(error: { message?: string; status: number }) {
+  if (error.status === 401 || error.status === 400) {
+    return error.message ?? "Invalid email/phone or password.";
+  }
+
+  if (error.status === 429) {
+    return "Too many attempts. Wait a minute and try again.";
+  }
+
+  if (error.status >= 500) {
+    return "The server is not responding. Check that the backend is running on port 8080.";
+  }
+
+  return error.message ?? "Could not sign in. Try again.";
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,7 +63,7 @@ export default function Login() {
           });
 
       if (result.error) {
-        setError(result.error.message ?? "Invalid credentials.");
+        setError(signInError(result.error));
         return;
       }
 

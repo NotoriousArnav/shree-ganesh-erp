@@ -10,7 +10,7 @@ import { createMcpServer } from "./mcp.js";
 import { openapiSpec } from "./openapi.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
-import { registerInventoryRoutes } from "./routes/inventory-routes.js";
+import { registerMerchantRoutes } from "./routes/merchant-routes.js";
 
 const app = Fastify({
   logger: true,
@@ -44,7 +44,7 @@ app.get("/openapi.json", async () => openapiSpec);
 
 await registerAuthRoutes(app);
 await registerAdminRoutes(app);
-await registerInventoryRoutes(app);
+await registerMerchantRoutes(app);
 
 app.post("/mcp", async (req, reply) => {
   const transport = new StreamableHTTPServerTransport({

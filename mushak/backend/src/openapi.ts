@@ -139,17 +139,147 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
-    "/api/inventory/products": {
+    "/api/merchant/profile": {
       get: {
-        summary: "List products for the signed-in merchant",
-        description:
-          "Requires merchant or staff. The merchant is taken from the session, never from the request.",
+        summary: "Signed-in merchant and user",
+        description: "Requires merchant or staff. The merchant comes from the session.",
         security: [{ sessionCookie: [] }],
         responses: {
-          "200": { description: "Products" },
+          "200": { description: "Merchant and user" },
           "401": { description: "Not signed in" },
           "403": { description: "Not a merchant-scoped role" },
         },
+      },
+    },
+    "/api/merchant/dashboard": {
+      get: {
+        summary: "Shop dashboard summary",
+        description:
+          "Counts, stock value, today's movements, low-stock products and recent stock movements.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "200": { description: "Dashboard" },
+          "401": { description: "Not signed in" },
+          "403": { description: "Not a merchant-scoped role" },
+        },
+      },
+    },
+    "/api/merchant/categories": {
+      get: {
+        summary: "List categories",
+        security: [{ sessionCookie: [] }],
+        responses: { "200": { description: "Categories with product counts" } },
+      },
+      post: {
+        summary: "Create a category",
+        description: "Requires the merchant role.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body or parent category" },
+          "409": { description: "Duplicate name" },
+        },
+      },
+    },
+    "/api/merchant/categories/{id}": {
+      patch: {
+        summary: "Rename a category",
+        description: "Requires the merchant role.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Updated" },
+          "404": { description: "Not found" },
+          "409": { description: "Duplicate name" },
+        },
+      },
+      delete: {
+        summary: "Delete a category",
+        description: "Products keep existing and become uncategorised.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Deleted" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/merchant/products": {
+      get: {
+        summary: "List products",
+        description:
+          "Query: q (name/SKU/barcode), categoryId, lowStock=true, includeInactive=true.",
+        security: [{ sessionCookie: [] }],
+        responses: { "200": { description: "Products with category names" } },
+      },
+      post: {
+        summary: "Create a product",
+        description:
+          "Requires the merchant role. Opening stock is recorded as an adjustment movement.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body or category" },
+          "409": { description: "Duplicate SKU or barcode" },
+        },
+      },
+    },
+    "/api/merchant/products/{id}": {
+      patch: {
+        summary: "Update a product",
+        description:
+          "Requires the merchant role. Stock is not editable here; use the stock endpoint.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Updated" },
+          "400": { description: "Invalid body" },
+          "404": { description: "Not found" },
+          "409": { description: "Duplicate SKU or barcode" },
+        },
+      },
+      delete: {
+        summary: "Archive a product",
+        description: "Soft delete: sets isActive=false and keeps stock history.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Archived" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/merchant/products/{id}/stock": {
+      post: {
+        summary: "Move stock",
+        description:
+          "Types: purchase, sale, return_in, return_out, damage, adjustment, transfer_in, transfer_out. Quantity is positive; the type decides the sign. Adjustment requires direction=in|out.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Updated product and movement" },
+          "400": { description: "Invalid body or insufficient stock" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/merchant/products/{id}/movements": {
+      get: {
+        summary: "Stock history for one product",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Product and movements" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/merchant/movements": {
+      get: {
+        summary: "Recent stock movements",
+        description: "Query: limit (1-200, default 50).",
+        security: [{ sessionCookie: [] }],
+        responses: { "200": { description: "Movements with product names" } },
       },
     },
     "/mcp": {

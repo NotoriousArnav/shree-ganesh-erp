@@ -6,6 +6,8 @@ import { defaultStatements } from "better-auth/plugins/admin/access";
 
 import { db } from "./db.js";
 import * as schema from "./db/schema.js";
+import { getMailer } from "./mail/index.js";
+import { escapeHtml } from "./mail/mailer.js";
 
 /**
  * Role definitions.
@@ -66,6 +68,45 @@ export const auth = betterAuth({
     enabled: true,
     // Accounts are provisioned by an admin or seeded; no public sign-up.
     disableSignUp: process.env.ALLOW_SIGNUP !== "true",
+    sendResetPassword: async ({ user, url }) => {
+      await getMailer().send({
+        to: user.email,
+        subject: "Reset your Mushak password",
+        text: [
+          `Hi ${user.name},`,
+          "",
+          "Use this link to choose a new password:",
+          "",
+          url,
+          "",
+          "If you did not request this, you can ignore this email.",
+        ].join("\n"),
+        html: [
+          `<p>Hi ${escapeHtml(user.name)},</p>`,
+          `<p><a href="${escapeHtml(url)}">Choose a new password</a></p>`,
+          "<p>If you did not request this, you can ignore this email.</p>",
+        ].join(""),
+      });
+    },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await getMailer().send({
+        to: user.email,
+        subject: "Verify your Mushak email",
+        text: [
+          `Hi ${user.name},`,
+          "",
+          "Verify your email address:",
+          "",
+          url,
+        ].join("\n"),
+        html: [
+          `<p>Hi ${escapeHtml(user.name)},</p>`,
+          `<p><a href="${escapeHtml(url)}">Verify your email address</a></p>`,
+        ].join(""),
+      });
+    },
   },
   user: {
     modelName: "users",

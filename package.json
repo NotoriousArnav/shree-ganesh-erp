@@ -19,7 +19,8 @@
     "db:migrate": "npm run db:migrate -w mushak/backend",
     "db:studio": "npm run db:studio -w mushak/backend",
     "seed:admin": "npm run seed:admin -w mushak/backend",
-    "user:create": "npm run user:create -w mushak/backend --"
+    "user:create": "npm run user:create -w mushak/backend --",
+    "mail:test": "npm run mail:test -w mushak/backend --"
   },
   "devDependencies": {
     "drizzle-orm": "^0.45.4"

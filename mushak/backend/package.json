@@ -15,7 +15,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
-    "user:create": "tsx src/scripts/create-user.ts"
+    "user:create": "tsx src/scripts/create-user.ts",
+    "mail:test": "tsx src/scripts/send-test-mail.ts"
   },
   "dependencies": {
     "@fastify/swagger": "^9.0.0",

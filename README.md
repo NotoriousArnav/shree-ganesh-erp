@@ -97,6 +97,35 @@ Roles and merchant links can also be edited directly with Drizzle Studio.
 `users.role` is constrained to the four role values; merchant-scoped accounts
 must have `users.merchant_id` set before they can use the API.
 
+## Mail
+
+Mail goes through `AbstractMailer` (`mushak/backend/src/mail/mailer.ts`).
+A transport only implements `deliver()`; validation, recipients, the generated
+message id and the MIME body are shared.
+
+The current transport is `ConsoleMailer`:
+
+- prints From/To/Subject/body to the terminal
+- writes a `.eml` and a `.json` copy to `/tmp/mushak-mail` (mode `0600`)
+
+```bash
+npm run mail:test                       # send a sample message
+npm run mail:test -- someone@shop.in    # send to a specific address
+```
+
+Configuration in `mushak/backend/.env`:
+
+```dotenv
+MAIL_DRIVER=console
+MAIL_FROM=Mushak <no-reply@mushak.local>
+MAIL_DIR=/tmp/mushak-mail
+```
+
+Password-reset and email-verification hooks already use the mailer, so
+requesting a reset prints the link instead of sending it while `MAIL_DRIVER`
+is `console`. To add SMTP, extend `AbstractMailer` with a transport that
+implements `deliver()` and select it in `getMailer()`.
+
 ## Inventory schema (Phase 2)
 
 - `merchants` — shop profile (name, GSTIN, currency, address)

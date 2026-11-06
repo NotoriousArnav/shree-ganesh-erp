@@ -1,7 +1,7 @@
 {
   "name": "Mushak",
   "short_name": "Mushak",
-  "description": "Inventory management for small merchants",
+  "description": "Inventory management for small merchants by Shree Ganesh ERP",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

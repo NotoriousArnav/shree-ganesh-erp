@@ -106,6 +106,30 @@ Roles and merchant links can also be edited directly with Drizzle Studio.
 `users.role` is constrained to the four role values; merchant-scoped accounts
 must have `users.merchant_id` set before they can use the API.
 
+### Adding a new merchant
+
+A super admin registers a new shop through the admin API, then adds the owner:
+
+```bash
+# 1. Create the merchant shop.
+curl -X POST http://localhost:8080/api/admin/merchants \
+  -H 'content-type: application/json' -H 'cookie: <super_admin_session>' \
+  -d '{"name":"Anime Point Siliguri","slug":"anime-point-siliguri","phone":"+919870000000}'
+
+# 2. Create the shop owner (full permissions).
+curl -X POST http://localhost:8080/api/admin/merchants/<merchantId>/users \
+  -H 'content-type: application/json' -H 'cookie: <super_admin_session>' \
+  -d '{"name":"Deepak Kothiyal","email":"deepak@anime-point.in","password":"a-strong-password","permissions":["stock","catalogue","categories"]}'
+```
+
+The admin UI exposes both calls on `/admin` via **Add merchant**.
+
+Once the owner is in, they create staff from their own `/app/staff` screen, for
+example for an anime/figurine shop:
+
+- owner `Deepak Kothiyal` — `deepak@anime-point.in / deepak-pass-123` — full access
+- staff `Sushrita Saha` — `sushrita@anime-point.in / sushrita-pass-123` — `["stock"]`
+
 ## Mail
 
 Mail goes through `AbstractMailer` (`mushak/backend/src/mail/mailer.ts`).

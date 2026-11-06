@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import {
   staffPermissionValues,
   users,
+  type StaffPermission,
 } from "../db/schema.js";
 import {
   normalizePermissions,
@@ -187,6 +188,104 @@ function serialize(staff: {
   };
 }
 
+/** The merchant user row behind a provisioning result. */
+export type ProvisionedUser = {
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber: string | null;
+  permissions: StaffPermission[];
+  banned: boolean | null;
+  merchantId: string | null;
+  role: string;
+};
+
+/**
+ * Creates a credential user for a merchant with a chosen permission set.
+ * Used by both the merchant staff flow and the admin provisioning flow.
+ */
+export async function provisionMerchantAccount(input: {
+  merchantId: string;
+  name: string;
+  email: string;
+  password: string;
+  phoneNumber: string | null;
+  permissions: StaffPermission[];
+  role: "merchant" | "staff";
+}): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber: string | null;
+  permissions: StaffPermission[];
+  active: boolean;
+  createdAt: Date;
+} | null> {
+  const ctx = await auth.$context;
+  const passwordHash = await ctx.password.hash(input.password);
+
+  const created = await ctx.internalAdapter.createUser(
+    {
+      name: input.name,
+      email: input.email.toLowerCase(),
+      emailVerified: false,
+      role: input.role,
+      merchantId: input.merchantId,
+      phoneNumber: input.phoneNumber,
+      phoneNumberVerified: false,
+      banned: false,
+      staffPermissions: input.permissions,
+    },
+    { method: "admin" },
+  );
+
+  try {
+    await ctx.internalAdapter.linkAccount({
+      providerId: "credential",
+      accountId: created.id,
+      userId: created.id,
+      password: passwordHash,
+    });
+  } catch (error) {
+    // Do not leave a user who can never sign in.
+    await ctx.internalAdapter.deleteUser(created.id);
+    throw error;
+  }
+
+  // Better Auth only knows its own user fields, so the permission list has to
+  // be written back explicitly.
+  await db
+    .update(users)
+    .set({ staffPermissions: input.permissions })
+    .where(eq(users.id, created.id));
+
+  const [user] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phoneNumber: users.phoneNumber,
+      permissions: users.staffPermissions,
+      banned: users.banned,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(and(eq(users.id, created.id), eq(users.merchantId, input.merchantId)))
+    .limit(1);
+
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phoneNumber: user.phoneNumber,
+    permissions: normalizePermissions(user.permissions) as StaffPermission[],
+    active: !user.banned,
+    createdAt: user.createdAt,
+  };
+}
+
 export async function registerStaffRoutes(app: FastifyInstance) {
   const owner = requireOwner();
 
@@ -220,57 +319,26 @@ export async function registerStaffRoutes(app: FastifyInstance) {
       const input = parse(staffCreateInput, request.body, reply);
       if (!input) return;
 
-      const ctx = await auth.$context;
-      const password = await ctx.password.hash(input.password);
-
-      let created: { id: string };
-
       try {
-        created = await ctx.internalAdapter.createUser(
-          {
-            name: input.name,
-            email: input.email.toLowerCase(),
-            emailVerified: false,
-            role: "staff",
-            merchantId,
-            phoneNumber: input.phoneNumber ?? null,
-            phoneNumberVerified: false,
-            banned: false,
-            staffPermissions: input.permissions,
-          },
-          { method: "admin" },
-        );
+        const staff = await provisionMerchantAccount({
+          merchantId,
+          name: input.name,
+          email: input.email.toLowerCase(),
+          password: input.password,
+          phoneNumber: input.phoneNumber ?? null,
+          permissions: input.permissions,
+          role: "staff",
+        });
+
+        if (!staff) return reply.code(500).send({ error: "Could not create staff" });
+
+        return reply.code(201).send(staff);
       } catch (error) {
         if (isUniqueViolation(error)) {
           return reply.code(409).send({ error: duplicateMessage(error) });
         }
         throw error;
       }
-
-      try {
-        await ctx.internalAdapter.linkAccount({
-          providerId: "credential",
-          accountId: created.id,
-          userId: created.id,
-          password,
-        });
-      } catch (error) {
-        // Do not leave a user who can never sign in.
-        await ctx.internalAdapter.deleteUser(created.id);
-        throw error;
-      }
-
-      // Better Auth only knows its own user fields, so the staff permission
-      // list has to be written back explicitly.
-      await db
-        .update(users)
-        .set({ staffPermissions: input.permissions })
-        .where(eq(users.id, created.id));
-
-      const staff = await findStaff(merchantId, created.id);
-      if (!staff) return reply.code(500).send({ error: "Could not create staff" });
-
-      return reply.code(201).send(serialize(staff));
     },
   );
 

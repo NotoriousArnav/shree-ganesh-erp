@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 
@@ -38,8 +41,8 @@ const roleStyles: Record<string, string> = {
   staff: "border border-border bg-muted text-muted-foreground",
 };
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { credentials: "include" });
+async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { credentials: "include", ...init });
   if (!response.ok) {
     throw new Error(`Request failed with ${response.status}`);
   }
@@ -62,6 +65,16 @@ export default function Admin() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [newMerchant, setNewMerchant] = useState({
+    name: "",
+    ownerName: "",
+    ownerEmail: "",
+    ownerPassword: "",
+    ownerPhone: "",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +100,72 @@ export default function Admin() {
       cancelled = true;
     };
   }, []);
+
+  async function refreshLists() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [merchantRows, userRows] = await Promise.all([
+        fetchJson<MerchantRow[]>("/api/admin/merchants"),
+        fetchJson<UserRow[]>("/api/admin/users"),
+      ]);
+      setMerchants(merchantRows);
+      setUsers(userRows);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createMerchant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAddError(null);
+
+    if (!newMerchant.name.trim()) {
+      setAddError("Give the shop a name.");
+      return;
+    }
+
+    if (!newMerchant.ownerEmail.trim() || newMerchant.ownerPassword.length < 8) {
+      setAddError("The shop owner needs an email and a password of at least 8 characters.");
+      return;
+    }
+
+    setAddBusy(true);
+
+    try {
+      const merchant = await fetchJson<{ id: string }>("/api/admin/merchants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: newMerchant.name.trim(),
+          phone: newMerchant.ownerPhone.trim() || null,
+        }),
+      });
+
+      await fetchJson(`/api/admin/merchants/${merchant.id}/users`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: newMerchant.ownerName.trim() || "Shop Owner",
+          email: newMerchant.ownerEmail.trim(),
+          password: newMerchant.ownerPassword,
+          phoneNumber: newMerchant.ownerPhone.trim() || null,
+          permissions: ["stock", "catalogue", "categories"],
+        }),
+      });
+
+      setAddOpen(false);
+      setNewMerchant({ name: "", ownerName: "", ownerEmail: "", ownerPassword: "", ownerPhone: "" });
+      await refreshLists();
+    } catch (cause: unknown) {
+      setAddError(cause instanceof Error ? cause.message : "Could not create merchant");
+    } finally {
+      setAddBusy(false);
+    }
+  }
 
   const merchantName = (id: string | null) =>
     id ? (merchants.find((merchant) => merchant.id === id)?.name ?? "—") : "—";
@@ -135,9 +214,14 @@ export default function Admin() {
           <section>
             <div className="flex items-baseline justify-between">
               <h2 className="text-lg font-semibold">Merchants</h2>
-              <span className="text-xs text-muted-foreground">
-                {merchants.length} total
-              </span>
+              <div className="flex items-baseline gap-3">
+                <span className="text-xs text-muted-foreground">
+                  {merchants.length} total
+                </span>
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  Add merchant
+                </Button>
+              </div>
             </div>
 
             <div className="mt-3 overflow-x-auto rounded-lg border">
@@ -179,6 +263,77 @@ export default function Admin() {
               </table>
             </div>
           </section>
+
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title="Add merchant">
+        <form className="space-y-4" onSubmit={createMerchant}>
+          <div className="space-y-1.5">
+            <Label htmlFor="merchant-name">Shop name</Label>
+            <Input
+              id="merchant-name"
+              value={newMerchant.name}
+              onChange={(event) => setNewMerchant({ ...newMerchant, name: event.target.value })}
+              placeholder="Anime Point Siliguri"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="merchant-owner-name">Owner name</Label>
+              <Input
+                id="merchant-owner-name"
+                value={newMerchant.ownerName}
+                onChange={(event) => setNewMerchant({ ...newMerchant, ownerName: event.target.value })}
+                placeholder="Deepak Kothiyal"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="merchant-owner-phone">Owner phone (optional)</Label>
+              <Input
+                id="merchant-owner-phone"
+                value={newMerchant.ownerPhone}
+                onChange={(event) => setNewMerchant({ ...newMerchant, ownerPhone: event.target.value })}
+                placeholder="+91 98765 43210"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="merchant-owner-email">Owner email</Label>
+              <Input
+                id="merchant-owner-email"
+                type="email"
+                value={newMerchant.ownerEmail}
+                onChange={(event) => setNewMerchant({ ...newMerchant, ownerEmail: event.target.value })}
+                placeholder="deepak@anime-point.in"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="merchant-owner-password">Owner password</Label>
+              <Input
+                id="merchant-owner-password"
+                type="password"
+                value={newMerchant.ownerPassword}
+                onChange={(event) => setNewMerchant({ ...newMerchant, ownerPassword: event.target.value })}
+                placeholder="At least 8 characters"
+              />
+            </div>
+          </div>
+
+          {addError ? (
+            <p className="text-sm text-destructive" role="alert">{addError}</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={addBusy}>
+              {addBusy ? "Creating…" : "Create merchant"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
           <section>
             <div className="flex items-baseline justify-between">

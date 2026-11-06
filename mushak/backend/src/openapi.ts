@@ -126,6 +126,19 @@ export const openapiSpec: OpenAPIV3.Document = {
           "403": { description: "Not a platform role" },
         },
       },
+      post: {
+        summary: "Create a merchant",
+        description:
+          "Requires the super_admin or dev role. Creates a shop; a starter owner can then be added via /api/admin/merchants/{id}/users.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body" },
+          "401": { description: "Not signed in" },
+          "403": { description: "Not a platform role" },
+          "409": { description: "Slug already in use" },
+        },
+      },
     },
     "/api/admin/users": {
       get: {
@@ -136,6 +149,23 @@ export const openapiSpec: OpenAPIV3.Document = {
           "200": { description: "Users" },
           "401": { description: "Not signed in" },
           "403": { description: "Not a platform role" },
+        },
+      },
+    },
+    "/api/admin/merchants/{merchantId}/users": {
+      post: {
+        summary: "Create a merchant-scoped user",
+        description:
+          "Requires the super_admin or dev role. Creates a merchant account with a credential login and the full permission set by default (owner).",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "merchantId", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body" },
+          "401": { description: "Not signed in" },
+          "403": { description: "Not a platform role" },
+          "404": { description: "Merchant not found" },
+          "409": { description: "Email or phone already in use" },
         },
       },
     },

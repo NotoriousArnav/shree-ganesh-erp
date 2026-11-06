@@ -215,7 +215,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       post: {
         summary: "Create a product",
         description:
-          "Requires the merchant role. Opening stock is recorded as an adjustment movement.",
+          "Requires the merchant role. Opening stock is recorded as an adjustment movement. Send categoryName to reuse or create a category inline.",
         security: [{ sessionCookie: [] }],
         responses: {
           "201": { description: "Created" },
@@ -228,7 +228,7 @@ export const openapiSpec: OpenAPIV3.Document = {
       patch: {
         summary: "Update a product",
         description:
-          "Requires the merchant role. Stock is not editable here; use the stock endpoint.",
+          "Requires the merchant role. Stock is not editable here; use the stock endpoint. categoryName creates or reuses a category; an empty value clears it.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {

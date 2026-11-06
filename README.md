@@ -142,6 +142,12 @@ Merchant and staff accounts land on `/app` after signing in:
 | Stock | `/app/stock` | Full stock-movement history |
 | Categories | `/app/categories` | Create, rename and delete categories |
 
+The category field on the product form accepts an existing name or a new one.
+Typing a name that does not exist creates the category when the product is
+saved, so a merchant never has to visit the Categories screen first. Names are
+matched case-insensitively ("dairy" reuses "Dairy"). The same is available over
+the API as `categoryName` on product create/update.
+
 Roles:
 
 - **merchant** — everything above.

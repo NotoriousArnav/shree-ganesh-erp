@@ -58,6 +58,50 @@ function notFound(reply: FastifyReply) {
   return reply.code(404).send({ error: "Not found" });
 }
 
+/**
+ * Finds a category by name or creates it.
+ *
+ * Used by the product form, which lets a merchant type a new category instead
+ * of leaving the dialog to create one first. Matching is case-insensitive so
+ * "dairy" reuses "Dairy".
+ */
+async function findOrCreateCategory(merchantId: string, rawName: string) {
+  const name = rawName.trim();
+  if (!name) return null;
+
+  const [existing] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.merchantId, merchantId),
+        sql`lower(${categories.name}) = lower(${name})`,
+      ),
+    )
+    .limit(1);
+
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(categories)
+    .values({ merchantId, name })
+    .onConflictDoNothing({ target: [categories.merchantId, categories.name] })
+    .returning({ id: categories.id });
+
+  if (created) return created.id;
+
+  // Lost a race with another insert; read it back.
+  const [fallback] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(eq(categories.merchantId, merchantId), eq(categories.name, name)),
+    )
+    .limit(1);
+
+  return fallback?.id ?? null;
+}
+
 const optionalText = (max = 120) =>
   z
     .string()
@@ -87,6 +131,8 @@ const units = [
 const productFields = {
   name: z.string().trim().min(1, "Name is required").max(160),
   categoryId: z.uuid().nullish(),
+  /** Free-text category; created on save when it does not exist yet. */
+  categoryName: optionalText(80),
   sku: optionalText(64),
   barcode: optionalText(64),
   unit: z.enum(units).default("pcs"),
@@ -107,6 +153,8 @@ const productCreateInput = z.object({
 const productUpdateInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(160).optional(),
   categoryId: z.uuid().nullish(),
+  /** Free-text category; an empty value clears the category. */
+  categoryName: optionalText(80),
   sku: optionalText(64),
   barcode: optionalText(64),
   unit: z.enum(units).optional(),
@@ -448,11 +496,16 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     const input = parse(productCreateInput, request.body, reply);
     if (!input) return;
 
-    if (input.categoryId) {
+    let categoryId = input.categoryId ?? null;
+
+    // `categoryName` wins so the product form can create a category inline.
+    if (input.categoryName) {
+      categoryId = await findOrCreateCategory(merchantId, input.categoryName);
+    } else if (categoryId) {
       const [category] = await db
         .select({ id: categories.id })
         .from(categories)
-        .where(and(eq(categories.id, input.categoryId), eq(categories.merchantId, merchantId)))
+        .where(and(eq(categories.id, categoryId), eq(categories.merchantId, merchantId)))
         .limit(1);
       if (!category) return reply.code(400).send({ error: "Category not found" });
     }
@@ -464,7 +517,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
           .values({
             merchantId,
             name: input.name,
-            categoryId: input.categoryId ?? null,
+            categoryId,
             sku: input.sku,
             barcode: input.barcode,
             unit: input.unit,
@@ -511,7 +564,28 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       const input = parse(productUpdateInput, request.body, reply);
       if (!input) return;
 
-      if (input.categoryId) {
+      // Check first so a bad id cannot create a category as a side effect.
+      const [existing] = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
+        .limit(1);
+
+      if (!existing) return notFound(reply);
+
+      const patch: Record<string, unknown> = Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value !== undefined),
+      );
+
+      // Never write the helper field; it is resolved into categoryId.
+      delete patch.categoryName;
+
+      if (input.categoryName !== undefined) {
+        // An empty name clears the category, otherwise create or reuse it.
+        patch.categoryId = input.categoryName
+          ? await findOrCreateCategory(merchantId, input.categoryName)
+          : null;
+      } else if (input.categoryId) {
         const [category] = await db
           .select({ id: categories.id })
           .from(categories)
@@ -519,10 +593,6 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
           .limit(1);
         if (!category) return reply.code(400).send({ error: "Category not found" });
       }
-
-      const patch = Object.fromEntries(
-        Object.entries(input).filter(([, value]) => value !== undefined),
-      );
 
       if (Object.keys(patch).length === 0) {
         return reply.code(400).send({ error: "No changes supplied" });

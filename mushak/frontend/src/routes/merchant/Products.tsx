@@ -38,21 +38,15 @@ export default function Products() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const loadCategories = useCallback(() => {
     api<Category[]>("/api/merchant/categories")
-      .then((rows) => {
-        if (!cancelled) setCategories(rows);
-      })
+      .then(setCategories)
       .catch(() => {
         // The product list still works without categories.
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(loadCategories, [loadCategories]);
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -302,6 +296,8 @@ export default function Products() {
           onSaved={() => {
             setEditing(null);
             load();
+            // A new category may have been typed in the dialog.
+            loadCategories();
           }}
         />
       ) : null}

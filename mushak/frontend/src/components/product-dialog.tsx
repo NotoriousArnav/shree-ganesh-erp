@@ -38,7 +38,7 @@ export default function ProductDialog({
   const isNew = product === null;
 
   const [name, setName] = useState(product?.name ?? "");
-  const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
+  const [categoryName, setCategoryName] = useState(product?.categoryName ?? "");
   const [unit, setUnit] = useState(product?.unit ?? "pcs");
   const [sku, setSku] = useState(product?.sku ?? "");
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
@@ -69,7 +69,8 @@ export default function ProductDialog({
 
     const payload = {
       name: name.trim(),
-      categoryId: categoryId || null,
+      // Always send the name: blank clears it, a new name is created on save.
+      categoryName: categoryName.trim() || null,
       sku: sku.trim() || null,
       barcode: barcode.trim() || null,
       unit,
@@ -130,18 +131,22 @@ export default function ProductDialog({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="product-category">Category</Label>
-            <Select
+            <Input
               id="product-category"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-            >
-              <option value="">No category</option>
+              list="product-category-options"
+              value={categoryName}
+              onChange={(event) => setCategoryName(event.target.value)}
+              placeholder="Dairy, Snacks…"
+              autoComplete="off"
+            />
+            <datalist id="product-category-options">
               {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
+                <option key={category.id} value={category.name} />
               ))}
-            </Select>
+            </datalist>
+            <p className="text-xs text-muted-foreground">
+              Pick an existing one or type a new name; it is created on save.
+            </p>
           </div>
 
           <div className="space-y-1.5">

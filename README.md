@@ -33,6 +33,15 @@ npm run seed:admin
 
 It reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `mushak/backend/.env`.
 
+### Trying it on a phone
+
+The Vite dev server listens on `0.0.0.0`, so a phone on the same Wi-Fi can open
+`http://<laptop-lan-ip>:5173`. Auth trusts the laptop's LAN addresses
+automatically in development, so signing in works without extra config.
+
+If the frontend runs on another hostname or port, add it to `TRUSTED_ORIGINS`
+(comma-separated) in `mushak/backend/.env` and restart the backend.
+
 ## Database
 
 The database runs as the `mushak-db` container (`postgres:17-alpine`) with a

@@ -8,6 +8,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { client, db } from "./db.js";
 import { createMcpServer } from "./mcp.js";
 import { openapiSpec } from "./openapi.js";
+import { registerAdminRoutes } from "./routes/admin-routes.js";
+import { registerAuthRoutes } from "./routes/auth-routes.js";
+import { registerInventoryRoutes } from "./routes/inventory-routes.js";
 
 const app = Fastify({
   logger: true,
@@ -38,6 +41,10 @@ app.get("/health/db", async (_request, reply) => {
 });
 
 app.get("/openapi.json", async () => openapiSpec);
+
+await registerAuthRoutes(app);
+await registerAdminRoutes(app);
+await registerInventoryRoutes(app);
 
 app.post("/mcp", async (req, reply) => {
   const transport = new StreamableHTTPServerTransport({

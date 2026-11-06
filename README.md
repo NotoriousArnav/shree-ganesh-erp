@@ -7,6 +7,7 @@ Mushak is the first application in the Shree Ganesh ERP suite.
 - **Frontend** — React 18, React Router v7, Vite 5, PWA, TypeScript, Tailwind CSS v4
 - **Backend** — Fastify 5, TypeScript, OpenAPI/Swagger, MCP server
 - **Database** — PostgreSQL 17 in Docker, Drizzle ORM + `postgres.js`
+- **Auth** — Better Auth, email/password and phone/password, database sessions
 
 ## Getting started
 
@@ -22,6 +23,15 @@ npm run dev:mushak                                   # frontend + backend
 - Backend: http://localhost:8080
 - API docs: http://localhost:8080/docs
 - DB health: http://localhost:8080/health/db
+- Sign in: http://localhost:5173/login
+
+Create the first admin after the initial setup:
+
+```bash
+npm run seed:admin
+```
+
+It reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `mushak/backend/.env`.
 
 ## Database
 
@@ -52,6 +62,41 @@ The app uses `postgres.js` with `max: 1` and `prepare: false`, so the same code
 works against a local container or a serverless/pooled provider such as Neon,
 Supabase or Vercel Postgres — only `DATABASE_URL` changes.
 
+## Authentication and roles
+
+Better Auth handles sessions in the database and sets an http-only cookie.
+Users sign in with **email or phone** plus a password. Public sign-up is
+disabled; accounts are provisioned by the admin.
+
+| Role | Scope | Access |
+| --- | --- | --- |
+| `super_admin` | Platform | Everything, including admin API and impersonation |
+| `dev` | Platform | Read users/merchants, support actions, no role changes |
+| `merchant` | One merchant | Own inventory and staff |
+| `staff` | One merchant | Day-to-day operations, no user management |
+
+Guards live in `mushak/backend/src/http/auth-guard.ts`. The merchant id always
+comes from the session, never from the request body.
+
+Create a user:
+
+```bash
+npm run user:create -- \
+  --email owner@shop.in \
+  --password 'a-strong-password' \
+  --name 'Shop Owner' \
+  --role merchant \
+  --merchant ganesh-kirana \
+  --phone +919876543210
+```
+
+`--merchant` accepts a merchant id or slug and is required for `merchant` and
+`staff`. `--phone` is optional and enables phone sign-in.
+
+Roles and merchant links can also be edited directly with Drizzle Studio.
+`users.role` is constrained to the four role values; merchant-scoped accounts
+must have `users.merchant_id` set before they can use the API.
+
 ## Inventory schema (Phase 2)
 
 - `merchants` — shop profile (name, GSTIN, currency, address)
@@ -62,4 +107,4 @@ Supabase or Vercel Postgres — only `DATABASE_URL` changes.
 
 ## Current phase
 
-Phase 2 — Inventory schema and database connection.
+Phase 2 — Inventory schema, database connection, and authentication.

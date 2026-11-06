@@ -1,6 +1,20 @@
+import { Link } from "react-router";
+
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth-client";
+
+const roleLabels: Record<string, string> = {
+  super_admin: "Super Admin",
+  dev: "Dev",
+  merchant: "Merchant",
+  staff: "Staff",
+};
 
 export default function Home() {
+  const { data, isPending } = authClient.useSession();
+  const role = data?.user.role;
+  const isPlatform = role === "super_admin" || role === "dev";
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-12 text-center">
       <img
@@ -25,7 +39,38 @@ export default function Home() {
         className="h-40 w-auto max-w-full"
       />
 
-      <Button>Get Started</Button>
+      {isPending ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : data ? (
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            Signed in as{" "}
+            <span className="font-medium text-foreground">
+              {data.user.name}
+            </span>{" "}
+            · {roleLabels[role ?? ""] ?? role}
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {isPlatform ? (
+              <Button asChild>
+                <Link to="/admin">Open admin</Link>
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              onClick={() => {
+                void authClient.signOut();
+              }}
+            >
+              Sign out
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button asChild>
+          <Link to="/login">Sign in</Link>
+        </Button>
+      )}
     </main>
   );
 }

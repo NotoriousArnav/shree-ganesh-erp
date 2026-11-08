@@ -74,8 +74,8 @@ export const categories = pgTable(
   ],
 );
 
-export const products = pgTable(
-  "products",
+export const catalogueItems = pgTable(
+  "catalogue_items",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id")
@@ -107,6 +107,40 @@ export const products = pgTable(
     })
       .default(0)
       .notNull(),
+    /** Optional per-vertical fields (brand, author, size, colour, ...). */
+    attributes: jsonb("attributes").$type<Record<string, string>>(),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("catalogue_items_merchant_idx").on(t.merchantId),
+    index("catalogue_items_category_idx").on(t.categoryId),
+    uniqueIndex("catalogue_items_merchant_sku_idx").on(t.merchantId, t.sku),
+    uniqueIndex("catalogue_items_merchant_barcode_idx").on(
+      t.merchantId,
+      t.barcode,
+    ),
+  ],
+);
+
+/**
+ * Stock state for one catalogue item.
+ *
+ * The catalogue owns what a product *is* (name, SKU, price, GST); this table
+ * owns how much of it the shop has. Keeping them apart means a catalogue entry
+ * can exist without stock and, later, one definition can have stock rows for
+ * several shops or locations.
+ */
+export const inventoryItems = pgTable(
+  "inventory_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    catalogueItemId: uuid("catalogue_item_id")
+      .notNull()
+      .references(() => catalogueItems.id, { onDelete: "cascade" }),
     /** Cached on-hand quantity; history is kept in stock_movements. */
     stockQty: numeric("stock_qty", { precision: 14, scale: 3, mode: "number" })
       .default(0)
@@ -118,16 +152,11 @@ export const products = pgTable(
     })
       .default(0)
       .notNull(),
-    /** Optional per-vertical fields (brand, author, size, colour, ...). */
-    attributes: jsonb("attributes").$type<Record<string, string>>(),
-    isActive: boolean("is_active").default(true).notNull(),
     ...timestamps,
   },
   (t) => [
-    index("products_merchant_idx").on(t.merchantId),
-    index("products_category_idx").on(t.categoryId),
-    uniqueIndex("products_merchant_sku_idx").on(t.merchantId, t.sku),
-    uniqueIndex("products_merchant_barcode_idx").on(t.merchantId, t.barcode),
+    index("inventory_items_merchant_idx").on(t.merchantId),
+    uniqueIndex("inventory_items_catalogue_idx").on(t.catalogueItemId),
   ],
 );
 
@@ -138,9 +167,9 @@ export const stockMovements = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
-    productId: uuid("product_id")
+    inventoryItemId: uuid("inventory_item_id")
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
     type: stockMovementType("type").notNull(),
     /** Signed change, e.g. +10 purchase, -2 sale. */
     quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" })
@@ -155,7 +184,7 @@ export const stockMovements = pgTable(
       .notNull(),
   },
   (t) => [
-    index("stock_movements_product_idx").on(t.productId, t.createdAt),
+    index("stock_movements_inventory_idx").on(t.inventoryItemId, t.createdAt),
     index("stock_movements_merchant_idx").on(t.merchantId),
   ],
 );
@@ -164,8 +193,10 @@ export type Merchant = typeof merchants.$inferSelect;
 export type NewMerchant = typeof merchants.$inferInsert;
 export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
-export type Product = typeof products.$inferSelect;
-export type NewProduct = typeof products.$inferInsert;
+export type CatalogueItem = typeof catalogueItems.$inferSelect;
+export type NewCatalogueItem = typeof catalogueItems.$inferInsert;
+export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type NewInventoryItem = typeof inventoryItems.$inferInsert;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type NewStockMovement = typeof stockMovements.$inferInsert;
 

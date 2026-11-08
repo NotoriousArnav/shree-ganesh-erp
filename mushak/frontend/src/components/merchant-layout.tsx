@@ -24,7 +24,8 @@ type NavigationItem = {
 
 const navigation: NavigationItem[] = [
   { to: "/app", label: "Dashboard", end: true, icon: DashboardIcon },
-  { to: "/app/products", label: "Products", icon: BoxIcon },
+  { to: "/app/inventory", label: "Inventory", icon: BoxIcon },
+  { to: "/app/catalogue", label: "Catalogue", icon: CatalogueIcon },
   { to: "/app/stock", label: "Stock", icon: ArrowsIcon, permission: "stock" },
   {
     to: "/app/categories",
@@ -248,6 +249,15 @@ function ArrowsIcon() {
     <Icon>
       <path d="m7 15 5 5 5-5" />
       <path d="m7 9 5-5 5 5" />
+    </Icon>
+  );
+}
+
+function CatalogueIcon() {
+  return (
+    <Icon>
+      <path d="m12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
     </Icon>
   );
 }

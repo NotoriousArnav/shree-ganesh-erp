@@ -38,7 +38,7 @@ export default function ProductDetail() {
     setLoading(true);
     setError(null);
 
-    api<Product>(`/api/merchant/products/${id}`)
+    api<Product>(`/api/merchant/inventory/${id}`)
       .then(setProduct)
       .catch((cause: unknown) => setError(errorMessage(cause)))
       .finally(() => setLoading(false));
@@ -48,7 +48,7 @@ export default function ProductDetail() {
       return;
     }
 
-    api<MovementsResponse>(`/api/merchant/products/${id}/movements`)
+    api<MovementsResponse>(`/api/merchant/inventory/${id}/movements`)
       .then((result) => setMovements(result.movements))
       .catch(() => {
         // Stock history is a stock-permission view; merchants always have it.
@@ -92,9 +92,9 @@ export default function ProductDetail() {
     if (!archiveFor) return;
 
     try {
-      await api(`/api/merchant/products/${archiveFor.id}`, { method: "DELETE" });
+      await api(`/api/merchant/inventory/${archiveFor.id}`, { method: "DELETE" });
       setArchiveFor(null);
-      navigate("/app/products");
+      navigate("/app/inventory");
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -247,6 +247,7 @@ export default function ProductDetail() {
         <ProductDialog
           key={editing === "new" ? "new" : editing.id}
           product={editing === "new" ? null : editing}
+          resource="inventory"
           categories={categories}
           canCreateCategories={can("categories")}
           canSetOpeningStock={canStock}

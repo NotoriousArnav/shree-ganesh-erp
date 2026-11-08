@@ -24,8 +24,17 @@ export type StaffMember = {
   createdAt: string;
 };
 
+/**
+ * A flattened product row: catalogue definition joined with its stock row.
+ *
+ * `id` is whichever row the list is about — the inventory row on the Inventory
+ * tab, the catalogue definition on the Catalogue tab. `catalogueItemId` and
+ * `inventoryItemId` are always the two underlying ids.
+ */
 export type Product = {
   id: string;
+  catalogueItemId: string;
+  inventoryItemId: string | null;
   merchantId: string;
   categoryId: string | null;
   name: string;

@@ -23,6 +23,8 @@ npm run dev:mushak                                   # frontend + backend
 - Backend: http://localhost:8080
 - API docs: http://localhost:8080/docs
 - DB health: http://localhost:8080/health/db
+- Storage health: http://localhost:8080/health/storage
+- RustFS console: http://localhost:9001
 - Sign in: http://localhost:5173/login
 
 Create the first admin after the initial setup:
@@ -55,8 +57,8 @@ Scripts:
 
 | Script | Description |
 | --- | --- |
-| `npm run db:up` | Start the Postgres container |
-| `npm run db:down` | Stop the container (data is kept) |
+| `npm run db:up` | Start Postgres and RustFS containers |
+| `npm run db:down` | Stop the containers (data is kept) |
 | `npm run db:migrate` | Apply generated migrations |
 | `npm run db:studio` | Open Drizzle Studio |
 
@@ -164,6 +166,40 @@ is `console`. The full browser flow is:
 To add SMTP, extend `AbstractMailer` with a transport that implements
 `deliver()` and select it in `getMailer()`.
 
+## Object storage
+
+Files (product images, invoices, attachments) go through `AbstractStorage` in
+`mushak/backend/src/storage/storage.ts`. The S3 driver works with AWS S3,
+RustFS, MinIO and any S3-compatible endpoint. `getStorage()` picks the driver
+from `STORAGE_DRIVER`; the bundled `docker compose` runs RustFS locally, so
+`npm run db:up` starts both Postgres and RustFS.
+
+```dotenv
+STORAGE_DRIVER=s3
+S3_ENDPOINT=http://localhost:9000
+S3_REGION=us-east-1
+S3_ACCESS_KEY=mushakadmin
+S3_SECRET_KEY=mushak_dev_storage_secret
+S3_BUCKET=mushak
+S3_FORCE_PATH_STYLE=true
+# S3_PUBLIC_URL=https://cdn.example.com/mushak
+```
+
+The bucket is created on first use. Keys are tenant-scoped
+(`<merchantId>/…`), and the controller refuses keys outside the caller's prefix.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/storage/status` | Driver, bucket, reachability and prefix |
+| `POST` | `/api/storage/presign-upload` | Signed PUT URL (`catalogue` permission) |
+| `GET` | `/api/storage/presign-download` | Signed GET URL for one key |
+| `GET` | `/api/storage/objects` | List under the merchant prefix |
+| `PUT` | `/api/storage/objects` | Direct upload as `application/octet-stream` (`catalogue`) |
+| `DELETE` | `/api/storage/objects` | Delete one key (`catalogue`) |
+
+Browser uploads use the presigned URL, so bytes go straight to RustFS and never
+pass through the API server.
+
 ## Merchant app
 
 Merchant and staff accounts land on `/app` after signing in:
@@ -171,10 +207,17 @@ Merchant and staff accounts land on `/app` after signing in:
 | Screen | Path | What it does |
 | --- | --- | --- |
 | Dashboard | `/app` | Product and category counts, stock value, today's movements, low-stock list, recent activity |
-| Products | `/app/products` | Search, category and low-stock filters, add/edit/archive, stock adjustments |
+| Inventory | `/app/inventory` | On-hand stock, values and reorder levels, stock adjustments, product detail |
+| Catalogue | `/app/catalogue` | Product definitions: search, filters, add/edit/archive, prices, SKU and GST |
 | Stock | `/app/stock` | Full stock-movement history |
 | Categories | `/app/categories` | Create, rename and delete categories |
 | Staff | `/app/staff` | Create counter logins, choose access, reset passwords, deactivate |
+
+Inventory and Catalogue are two tables: `catalogue_items` holds the product
+definition (name, SKU, prices, GST), and `inventory_items` holds the stock for
+it (quantity, reorder level) with `stock_movements` as the audit trail. Adding a
+product from either tab creates both rows in one transaction, so there is one
+source of truth and no sync step. A catalogue item can exist with zero stock.
 
 The category field on the product form accepts an existing name or a new one.
 Typing a name that does not exist creates the category when the product is
@@ -239,10 +282,12 @@ All routes require a merchant or staff session.
 | `GET` | `/api/merchant/dashboard` | Counts, stock value, today, low stock, recent movements |
 | `GET/POST` | `/api/merchant/categories` | List with product counts, create |
 | `PATCH/DELETE` | `/api/merchant/categories/:id` | Rename, delete (products become uncategorised) |
-| `GET/POST` | `/api/merchant/products` | Filters: `q`, `categoryId`, `lowStock`, `includeInactive` |
-| `PATCH/DELETE` | `/api/merchant/products/:id` | Update, archive (soft delete) |
-| `POST` | `/api/merchant/products/:id/stock` | Stock movement |
-| `GET` | `/api/merchant/products/:id/movements` | History for one product |
+| `GET/POST` | `/api/merchant/catalogue` | Product definitions, `q`/`categoryId`/`includeInactive` |
+| `GET/PATCH/DELETE` | `/api/merchant/catalogue/:id` | Read, update, archive a definition |
+| `GET/POST` | `/api/merchant/inventory` | Stock rows, filters: `q`, `categoryId`, `lowStock`, `includeInactive` |
+| `GET/PATCH/DELETE` | `/api/merchant/inventory/:id` | Read, update, archive (id is the inventory row) |
+| `POST` | `/api/merchant/inventory/:id/stock` | Stock movement |
+| `GET` | `/api/merchant/inventory/:id/movements` | History for one product |
 | `GET` | `/api/merchant/movements` | Recent movements, `?limit=` 1-200 (stock permission) |
 | `GET/POST` | `/api/merchant/staff` | List staff, create a staff account (merchant only) |
 | `PATCH` | `/api/merchant/staff/:id` | Name, phone, permissions or `active` (merchant only) |
@@ -262,9 +307,12 @@ stock update plus the movement row happen in one transaction.
 
 - `merchants` — shop profile (name, GSTIN, currency, address)
 - `categories` — merchant-scoped, optionally nested
-- `products` — generic item with unit, HSN, tax, prices, cached stock and
-  free-form `attributes` for vertical-specific fields
-- `stock_movements` — signed audit trail of every stock change
+- `catalogue_items` — product definition: unit, HSN, tax, prices and free-form
+  `attributes` for vertical-specific fields
+- `inventory_items` — stock for one catalogue item: quantity and reorder level,
+  unique per catalogue item today so multi-location stock can grow into it
+- `stock_movements` — signed audit trail of every stock change, linked to the
+  inventory row
 
 ## Current phase
 

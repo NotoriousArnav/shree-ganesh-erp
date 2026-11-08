@@ -59,7 +59,7 @@ export default function Dashboard() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              title="Products"
+              title="Inventory"
               value={String(data.counts.activeProducts)}
               hint={`${data.counts.products - data.counts.activeProducts} archived · ${data.counts.categories} categories`}
             />
@@ -90,7 +90,7 @@ export default function Dashboard() {
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Needs reordering</CardTitle>
                 <Link
-                  to="/app/products?lowStock=1"
+                  to="/app/inventory?lowStock=1"
                   className="text-xs text-primary underline underline-offset-2"
                 >
                   All products

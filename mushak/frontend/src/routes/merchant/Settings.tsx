@@ -17,7 +17,11 @@ export default function Settings() {
   const [phone, setPhone] = useState(merchant?.phone ?? "");
   const [gstin, setGstin] = useState(merchant?.gstin ?? "");
   const [currency, setCurrency] = useState(merchant?.currency ?? "INR");
-  const [address, setAddress] = useState("");
+  const [line1, setLine1] = useState("");
+  const [line2, setLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [pincode, setPincode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -29,7 +33,11 @@ export default function Settings() {
     setPhone(merchant.phone ?? "");
     setGstin(merchant.gstin ?? "");
     setCurrency(merchant.currency);
-    setAddress(merchant.address ? JSON.stringify(merchant.address, null, 2) : "");
+    setLine1(merchant.address?.line1 ?? "");
+    setLine2(merchant.address?.line2 ?? "");
+    setCity(merchant.address?.city ?? "");
+    setStateName(merchant.address?.state ?? "");
+    setPincode(merchant.address?.pincode ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [merchant?.id]);
 
@@ -43,17 +51,12 @@ export default function Settings() {
       return;
     }
 
-    let parsedAddress: Record<string, string> | null = null;
-
-    if (address.trim()) {
-      try {
-        const value = JSON.parse(address) as Record<string, string>;
-        parsedAddress = value && typeof value === "object" ? value : null;
-      } catch {
-        setError("The address must be a JSON object like {\"line1\": \"12 Market Road\"}.");
-        return;
-      }
-    }
+    const address: Record<string, string> = {};
+    if (line1.trim()) address.line1 = line1.trim();
+    if (line2.trim()) address.line2 = line2.trim();
+    if (city.trim()) address.city = city.trim();
+    if (stateName.trim()) address.state = stateName.trim();
+    if (pincode.trim()) address.pincode = pincode.trim();
 
     setBusy(true);
 
@@ -65,7 +68,7 @@ export default function Settings() {
           ...(phone.trim() ? { phone: phone.trim() } : { phone: null }),
           ...(gstin.trim() ? { gstin: gstin.trim() } : { gstin: null }),
           ...(currency.trim() ? { currency: currency.trim().toUpperCase() } : {}),
-          address: parsedAddress,
+          address: Object.keys(address).length > 0 ? address : null,
         },
       });
 
@@ -137,17 +140,51 @@ export default function Settings() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="settings-address">Address (JSON)</Label>
-          <textarea
-            id="settings-address"
-            className="flex min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            placeholder='{"line1": "12 Market Road", "city": "Pune", "state": "Maharashtra", "pincode": "411001"}'
+          <Label htmlFor="settings-line1">Address</Label>
+          <Input
+            id="settings-line1"
+            value={line1}
+            onChange={(event) => setLine1(event.target.value)}
+            placeholder="Shop number, building, street"
           />
-          <p className="text-xs text-muted-foreground">
-            Free-form address as JSON: line1, line2, city, state, pincode.
-          </p>
+          <Input
+            id="settings-line2"
+            value={line2}
+            onChange={(event) => setLine2(event.target.value)}
+            placeholder="Area, landmark (optional)"
+            aria-label="Address line 2"
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="settings-city">City</Label>
+            <Input
+              id="settings-city"
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+              placeholder="Pune"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="settings-state">State</Label>
+            <Input
+              id="settings-state"
+              value={stateName}
+              onChange={(event) => setStateName(event.target.value)}
+              placeholder="Maharashtra"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="settings-pincode">PIN code</Label>
+            <Input
+              id="settings-pincode"
+              value={pincode}
+              onChange={(event) => setPincode(event.target.value)}
+              inputMode="numeric"
+              placeholder="411001"
+            />
+          </div>
         </div>
 
         {error ? (

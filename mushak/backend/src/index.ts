@@ -12,6 +12,8 @@ import { registerAdminRoutes } from "./routes/admin-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerMerchantRoutes } from "./routes/merchant-routes.js";
 import { registerStaffRoutes } from "./routes/staff-routes.js";
+import { registerStorageRoutes } from "./routes/storage-routes.js";
+import { getStorage, isStorageConfigured } from "./storage/index.js";
 
 const app = Fastify({
   logger: true,
@@ -41,12 +43,34 @@ app.get("/health/db", async (_request, reply) => {
   }
 });
 
+app.get("/health/storage", async (_request, reply) => {
+  if (!isStorageConfigured()) {
+    return reply
+      .code(503)
+      .send({ status: "unconfigured", storage: "not configured" });
+  }
+
+  try {
+    const reachable = await getStorage().check();
+    if (!reachable) {
+      return reply
+        .code(503)
+        .send({ status: "error", storage: "unreachable" });
+    }
+    return { status: "ok", storage: "connected" };
+  } catch (error) {
+    app.log.error({ err: error }, "storage health check failed");
+    return reply.code(503).send({ status: "error", storage: "unreachable" });
+  }
+});
+
 app.get("/openapi.json", async () => openapiSpec);
 
 await registerAuthRoutes(app);
 await registerAdminRoutes(app);
 await registerMerchantRoutes(app);
 await registerStaffRoutes(app);
+await registerStorageRoutes(app);
 
 app.post("/mcp", async (req, reply) => {
   const transport = new StreamableHTTPServerTransport({

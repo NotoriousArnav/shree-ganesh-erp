@@ -39,6 +39,134 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
+    "/health/storage": {
+      get: {
+        summary: "Object storage health check",
+        responses: {
+          "200": {
+            description: "Storage is configured and reachable",
+          },
+          "503": {
+            description: "Storage is not configured or unreachable",
+          },
+        },
+      },
+    },
+    "/api/storage/status": {
+      get: {
+        summary: "Storage driver and tenant prefix",
+        responses: {
+          "200": {
+            description: "Driver, bucket and whether the bucket is reachable",
+          },
+          "401": {
+            description: "Not signed in",
+          },
+        },
+      },
+    },
+    "/api/storage/presign-upload": {
+      post: {
+        summary: "Create a presigned upload URL",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["filename"],
+                properties: {
+                  filename: { type: "string" },
+                  contentType: { type: "string" },
+                  prefix: { type: "string" },
+                  expiresIn: { type: "integer", minimum: 60 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Signed PUT URL and tenant-scoped object key",
+          },
+          "403": {
+            description: "Missing catalogue permission",
+          },
+          "503": {
+            description: "Storage is not configured",
+          },
+        },
+      },
+    },
+    "/api/storage/presign-download": {
+      get: {
+        summary: "Create a presigned download URL",
+        parameters: [
+          { name: "key", in: "query", required: true, schema: { type: "string" } },
+          {
+            name: "expiresIn",
+            in: "query",
+            schema: { type: "integer", minimum: 60 },
+          },
+          {
+            name: "downloadName",
+            in: "query",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Signed GET URL",
+          },
+          "400": {
+            description: "Key is outside the merchant's prefix",
+          },
+        },
+      },
+    },
+    "/api/storage/objects": {
+      get: {
+        summary: "List objects under the merchant's prefix",
+        parameters: [
+          { name: "prefix", in: "query", schema: { type: "string" } },
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 1000 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Object keys, sizes and timestamps",
+          },
+        },
+      },
+      put: {
+        summary: "Upload an object directly (application/octet-stream)",
+        parameters: [
+          { name: "key", in: "query", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "201": {
+            description: "Stored object metadata",
+          },
+          "415": {
+            description: "Body was not application/octet-stream",
+          },
+        },
+      },
+      delete: {
+        summary: "Delete an object",
+        parameters: [
+          { name: "key", in: "query", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "204": {
+            description: "Deleted",
+          },
+        },
+      },
+    },
     "/openapi.json": {
       get: {
         summary: "OpenAPI document",
@@ -238,18 +366,18 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
-    "/api/merchant/products": {
+    "/api/merchant/catalogue": {
       get: {
-        summary: "List products",
+        summary: "List catalogue items",
         description:
-          "Query: q (name/SKU/barcode), categoryId, lowStock=true, includeInactive=true.",
+          "Product definitions with their stock row joined in. Query: q (name/SKU/barcode), categoryId, includeInactive=true.",
         security: [{ sessionCookie: [] }],
-        responses: { "200": { description: "Products with category names" } },
+        responses: { "200": { description: "Catalogue items with stock and category names" } },
       },
       post: {
-        summary: "Create a product",
+        summary: "Create a catalogue item",
         description:
-          "Requires the merchant role or the catalogue permission. Opening stock is recorded as an adjustment movement and additionally needs the stock permission. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
+          "Requires the merchant role or the catalogue permission. Adds a product definition and an empty inventory row, so the item can exist before it is stocked. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
         security: [{ sessionCookie: [] }],
         responses: {
           "201": { description: "Created" },
@@ -258,22 +386,22 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
-    "/api/merchant/products/{id}": {
+    "/api/merchant/catalogue/{id}": {
       get: {
-        summary: "Get one product",
+        summary: "Get one catalogue item",
         description:
-          "Requires the merchant role or the catalogue permission. Returns the product with its category name. Stock is not editable here; use the stock endpoint.",
+          "Returns the definition joined with its stock row. The id is the catalogue item id.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
-          "200": { description: "Product with category name" },
+          "200": { description: "Catalogue item with stock and category name" },
           "404": { description: "Not found" },
         },
       },
       patch: {
-        summary: "Update a product",
+        summary: "Update a catalogue item",
         description:
-          "Requires the merchant role or the catalogue permission. Stock is not editable here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
+          "Requires the merchant role or the catalogue permission. Updates the definition; sending reorderLevel also updates the linked inventory row. Stock quantity is never edited here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -284,9 +412,9 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
       delete: {
-        summary: "Archive a product",
+        summary: "Archive a catalogue item",
         description:
-          "Soft delete: sets isActive=false and keeps stock history. Requires the merchant role or the catalogue permission.",
+          "Soft delete: sets isActive=false and keeps the inventory row and stock history. Requires the merchant role or the catalogue permission.",
         security: [{ sessionCookie: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
@@ -295,7 +423,64 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
-    "/api/merchant/products/{id}/stock": {
+    "/api/merchant/inventory": {
+      get: {
+        summary: "List inventory rows",
+        description:
+          "On-hand stock joined with catalogue definitions and category names. The returned id is the inventory row id; catalogueItemId identifies the definition. Query: q (name/SKU/barcode), categoryId, lowStock=true, includeInactive=true.",
+        security: [{ sessionCookie: [] }],
+        responses: { "200": { description: "Inventory rows with product and category names" } },
+      },
+      post: {
+        summary: "Add a stocked product",
+        description:
+          "Requires the merchant role or the catalogue permission. Creates a catalogue definition and an inventory row. Opening stock is recorded as an adjustment movement and additionally needs the stock permission. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          "201": { description: "Created" },
+          "400": { description: "Invalid body or category" },
+          "409": { description: "Duplicate SKU or barcode" },
+        },
+      },
+    },
+    "/api/merchant/inventory/{id}": {
+      get: {
+        summary: "Get one inventory row",
+        description:
+          "Returns the stock row joined with its definition and category name. The id is the inventory row id. Stock is not editable here; use the stock endpoint.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Inventory row with product and category name" },
+          "404": { description: "Not found" },
+        },
+      },
+      patch: {
+        summary: "Update a stocked product",
+        description:
+          "Requires the merchant role or the catalogue permission. Updates the definition behind the inventory row and, when sent, its reorderLevel. Stock quantity is not editable here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Updated" },
+          "400": { description: "Invalid body" },
+          "404": { description: "Not found" },
+          "409": { description: "Duplicate SKU or barcode" },
+        },
+      },
+      delete: {
+        summary: "Archive the product behind an inventory row",
+        description:
+          "Soft delete: sets the catalogue item isActive=false and keeps the stock row and history. Requires the merchant role or the catalogue permission.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Archived" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/merchant/inventory/{id}/stock": {
       post: {
         summary: "Move stock",
         description:
@@ -309,7 +494,7 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
-    "/api/merchant/products/{id}/movements": {
+    "/api/merchant/inventory/{id}/movements": {
       get: {
         summary: "Stock history for one product",
         security: [{ sessionCookie: [] }],

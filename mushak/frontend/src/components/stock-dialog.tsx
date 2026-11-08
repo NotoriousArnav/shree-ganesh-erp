@@ -62,7 +62,7 @@ export default function StockDialog({ product, onClose, onSaved }: Props) {
     setBusy(true);
 
     try {
-      await api(`/api/merchant/products/${product.id}/stock`, {
+      await api(`/api/merchant/inventory/${product.id}/stock`, {
         method: "POST",
         body: {
           type,

@@ -3,9 +3,10 @@ import { and, eq } from "drizzle-orm";
 
 import { db, client } from "../db.js";
 import {
+  catalogueItems,
   categories,
+  inventoryItems,
   merchants,
-  products,
   stockMovements,
   users,
 } from "../db/schema.js";
@@ -268,18 +269,21 @@ let createdProducts = 0;
 
 for (const item of CATALOGUE) {
   const [existing] = await db
-    .select({ id: products.id })
-    .from(products)
+    .select({ id: catalogueItems.id })
+    .from(catalogueItems)
     .where(
-      and(eq(products.merchantId, merchant.id), eq(products.sku, item.sku)),
+      and(
+        eq(catalogueItems.merchantId, merchant.id),
+        eq(catalogueItems.sku, item.sku),
+      ),
     )
     .limit(1);
 
   if (existing) continue;
 
   await db.transaction(async (tx) => {
-    const [product] = await tx
-      .insert(products)
+    const [catalogue] = await tx
+      .insert(catalogueItems)
       .values({
         merchantId: merchant.id,
         categoryId: categoryIds.get(item.category) ?? null,
@@ -290,6 +294,14 @@ for (const item of CATALOGUE) {
         taxRate: item.tax,
         purchasePrice: item.purchase,
         sellingPrice: item.selling,
+      })
+      .returning();
+
+    const [stock] = await tx
+      .insert(inventoryItems)
+      .values({
+        merchantId: merchant.id,
+        catalogueItemId: catalogue.id,
         stockQty: item.stock,
         reorderLevel: item.reorder,
       })
@@ -298,7 +310,7 @@ for (const item of CATALOGUE) {
     if (item.stock > 0) {
       await tx.insert(stockMovements).values({
         merchantId: merchant.id,
-        productId: product.id,
+        inventoryItemId: stock.id,
         type: "adjustment",
         quantity: item.stock,
         unitCost: item.purchase,

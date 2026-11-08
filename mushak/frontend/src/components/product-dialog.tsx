@@ -24,6 +24,8 @@ const units = [
 
 type Props = {
   product: Product | null;
+  /** Which table the form writes to: the stock row or the definition. */
+  resource: "inventory" | "catalogue";
   categories: Category[];
   /** Staff without the categories permission may only pick an existing one. */
   canCreateCategories: boolean;
@@ -35,12 +37,14 @@ type Props = {
 
 export default function ProductDialog({
   product,
+  resource,
   categories,
   canCreateCategories,
   canSetOpeningStock,
   onClose,
   onSaved,
 }: Props) {
+  const inventory = resource === "inventory";
   const isNew = product === null;
 
   const [name, setName] = useState(product?.name ?? "");
@@ -84,22 +88,26 @@ export default function ProductDialog({
       taxRate: Number(taxRate) || 0,
       purchasePrice: Number(purchasePrice) || 0,
       sellingPrice: Number(sellingPrice) || 0,
-      reorderLevel: Number(reorderLevel) || 0,
+      // Reorder levels belong to the stock row, so only send them where it
+      // exists or the API accepts them.
+      ...(inventory || !isNew ? { reorderLevel: Number(reorderLevel) || 0 } : {}),
     };
 
     setBusy(true);
 
     try {
       if (isNew) {
-        await api<Product>("/api/merchant/products", {
+        await api<Product>(`/api/merchant/${resource}`, {
           method: "POST",
-          body: {
-            ...payload,
-            stockQty: canSetOpeningStock ? Number(openingStock) || 0 : 0,
-          },
+          body: inventory
+            ? {
+                ...payload,
+                stockQty: canSetOpeningStock ? Number(openingStock) || 0 : 0,
+              }
+            : payload,
         });
       } else {
-        await api<Product>(`/api/merchant/products/${product.id}`, {
+        await api<Product>(`/api/merchant/${resource}/${product.id}`, {
           method: "PATCH",
           body: payload,
         });
@@ -120,8 +128,12 @@ export default function ProductDialog({
       title={isNew ? "Add product" : "Edit product"}
       description={
         isNew
-          ? "Selling price and stock are enough to start; the rest is optional."
-          : "Stock is changed through Stock so the history stays accurate."
+          ? inventory
+            ? "Selling price and stock are enough to start; the rest is optional."
+            : "Selling price is enough to start; stock is managed on the Inventory tab."
+          : inventory
+            ? "Stock is changed through Stock so the history stays accurate."
+            : "Changes apply wherever this product is stocked."
       }
     >
       <form className="space-y-4" onSubmit={onSubmit}>
@@ -277,23 +289,25 @@ export default function ProductDialog({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="product-reorder">Low-stock level</Label>
-            <Input
-              id="product-reorder"
-              type="number"
-              min="0"
-              step="0.001"
-              inputMode="decimal"
-              value={reorderLevel}
-              onChange={(event) => setReorderLevel(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Warn when stock falls to this.
-            </p>
-          </div>
+          {inventory || !isNew ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="product-reorder">Low-stock level</Label>
+              <Input
+                id="product-reorder"
+                type="number"
+                min="0"
+                step="0.001"
+                inputMode="decimal"
+                value={reorderLevel}
+                onChange={(event) => setReorderLevel(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Warn when stock falls to this.
+              </p>
+            </div>
+          ) : null}
 
-          {isNew && canSetOpeningStock ? (
+          {isNew && inventory && canSetOpeningStock ? (
             <div className="space-y-1.5">
               <Label htmlFor="product-opening">Opening stock</Label>
               <Input

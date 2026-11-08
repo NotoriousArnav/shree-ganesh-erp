@@ -15,9 +15,10 @@ import { z } from "zod";
 
 import { db } from "../db.js";
 import {
+  catalogueItems,
   categories,
+  inventoryItems,
   merchants,
-  products,
   stockMovements,
   stockMovementType,
 } from "../db/schema.js";
@@ -54,11 +55,11 @@ function parse<T>(schema: z.ZodType<T>, data: unknown, reply: FastifyReply) {
 function uniqueViolationMessage(error: unknown) {
   const constraint = uniqueConstraint(error);
 
-  if (constraint === "products_merchant_sku_idx") {
+  if (constraint === "catalogue_items_merchant_sku_idx") {
     return "That SKU is already used by another product";
   }
 
-  if (constraint === "products_merchant_barcode_idx") {
+  if (constraint === "catalogue_items_merchant_barcode_idx") {
     return "That barcode is already used by another product";
   }
 
@@ -67,6 +68,123 @@ function uniqueViolationMessage(error: unknown) {
 
 function notFound(reply: FastifyReply) {
   return reply.code(404).send({ error: "Not found" });
+}
+
+/**
+ * Flattened view shared by both tabs: catalogue definition plus its stock row.
+ * Catalogue queries use the catalogue id; inventory queries override `id` with
+ * the inventory row id so stock actions and detail links target the right row.
+ */
+const catalogueSelect = {
+  id: catalogueItems.id,
+  catalogueItemId: catalogueItems.id,
+  merchantId: catalogueItems.merchantId,
+  categoryId: catalogueItems.categoryId,
+  name: catalogueItems.name,
+  sku: catalogueItems.sku,
+  barcode: catalogueItems.barcode,
+  unit: catalogueItems.unit,
+  hsnCode: catalogueItems.hsnCode,
+  taxRate: catalogueItems.taxRate,
+  purchasePrice: catalogueItems.purchasePrice,
+  sellingPrice: catalogueItems.sellingPrice,
+  attributes: catalogueItems.attributes,
+  isActive: catalogueItems.isActive,
+  createdAt: catalogueItems.createdAt,
+  updatedAt: catalogueItems.updatedAt,
+  inventoryItemId: inventoryItems.id,
+  stockQty: sql<number>`coalesce(${inventoryItems.stockQty}, 0)::float8`,
+  reorderLevel: sql<number>`coalesce(${inventoryItems.reorderLevel}, 0)::float8`,
+  categoryName: categories.name,
+};
+
+async function loadCatalogueRow(merchantId: string, id: string) {
+  const [row] = await db
+    .select(catalogueSelect)
+    .from(catalogueItems)
+    .leftJoin(
+      inventoryItems,
+      eq(inventoryItems.catalogueItemId, catalogueItems.id),
+    )
+    .leftJoin(categories, eq(categories.id, catalogueItems.categoryId))
+    .where(
+      and(
+        eq(catalogueItems.id, id),
+        eq(catalogueItems.merchantId, merchantId),
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+async function loadInventoryRow(merchantId: string, id: string) {
+  const [row] = await db
+    .select({ ...catalogueSelect, id: inventoryItems.id })
+    .from(inventoryItems)
+    .innerJoin(
+      catalogueItems,
+      eq(catalogueItems.id, inventoryItems.catalogueItemId),
+    )
+    .leftJoin(categories, eq(categories.id, catalogueItems.categoryId))
+    .where(
+      and(
+        eq(inventoryItems.id, id),
+        eq(inventoryItems.merchantId, merchantId),
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * Resolves `categoryName` (create-if-allowed) or validates `categoryId`.
+ * Returns null after sending a 400/403 reply.
+ */
+async function resolveCategoryFor(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  merchantId: string,
+  input: { categoryId?: string | null; categoryName?: string | null },
+): Promise<string | null | undefined> {
+  if (input.categoryName) {
+    const resolved = await resolveCategoryName(
+      merchantId,
+      input.categoryName,
+      can(request, "categories"),
+    );
+    if (resolved.denied) {
+      reply.code(403).send({
+        error:
+          "That category does not exist and you do not have permission to create one.",
+      });
+      return undefined;
+    }
+    return resolved.id;
+  }
+
+  if (input.categoryId) {
+    const [category] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.id, input.categoryId),
+          eq(categories.merchantId, merchantId),
+        ),
+      )
+      .limit(1);
+
+    if (!category) {
+      reply.code(400).send({ error: "Category not found" });
+      return undefined;
+    }
+
+    return input.categoryId;
+  }
+
+  return input.categoryId ?? null;
 }
 
 /**
@@ -145,9 +263,14 @@ async function generateSku(merchantId: string, name: string) {
   for (let suffix = 1; suffix <= 999; suffix += 1) {
     const candidate = suffix === 1 ? base : `${base}-${suffix}`;
     const [taken] = await db
-      .select({ id: products.id })
-      .from(products)
-      .where(and(eq(products.merchantId, merchantId), eq(products.sku, candidate)))
+      .select({ id: catalogueItems.id })
+      .from(catalogueItems)
+      .where(
+        and(
+          eq(catalogueItems.merchantId, merchantId),
+          eq(catalogueItems.sku, candidate),
+        ),
+      )
       .limit(1);
 
     if (!taken) return candidate;
@@ -182,7 +305,8 @@ const units = [
   "sqft",
 ] as const;
 
-const productFields = {
+/** Definition fields shared by the catalogue and inventory forms. */
+const catalogueFields = {
   name: z.string().trim().min(1, "Name is required").max(160),
   categoryId: z.uuid().nullish(),
   /** Free-text category; created on save when it does not exist yet. */
@@ -194,17 +318,15 @@ const productFields = {
   taxRate: z.coerce.number().min(0, "Tax rate cannot be negative").max(100).default(0),
   purchasePrice: money,
   sellingPrice: money,
-  reorderLevel: quantity,
   attributes: z.record(z.string(), z.string()).nullish(),
 };
 
-const productCreateInput = z.object({
-  ...productFields,
-  /** Opening stock; recorded as an adjustment so history stays complete. */
-  stockQty: quantity,
-});
+/** Reorder level belongs to the stock row, not the catalogue definition. */
+const reorderLevel = quantity;
 
-const productUpdateInput = z.object({
+const catalogueCreateInput = z.object(catalogueFields);
+
+const catalogueUpdateInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(160).optional(),
   categoryId: z.uuid().nullish(),
   /** Free-text category; an empty value clears the category. */
@@ -216,9 +338,21 @@ const productUpdateInput = z.object({
   taxRate: z.coerce.number().min(0).max(100).optional(),
   purchasePrice: z.coerce.number().min(0).max(10_000_000).optional(),
   sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
-  reorderLevel: z.coerce.number().min(0).max(10_000_000).optional(),
   attributes: z.record(z.string(), z.string()).nullish(),
   isActive: z.boolean().optional(),
+  /** Convenience: updates the linked stock row in the same transaction. */
+  reorderLevel: reorderLevel.optional(),
+});
+
+const inventoryCreateInput = z.object({
+  ...catalogueFields,
+  /** Opening stock; recorded as an adjustment so history stays complete. */
+  stockQty: quantity,
+  reorderLevel,
+});
+
+const inventoryUpdateInput = z.object({
+  ...catalogueUpdateInput.shape,
 });
 
 const categoryInput = z.object({
@@ -339,15 +473,25 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       .where(eq(merchants.id, merchantId))
       .limit(1);
 
-    const [productStats] = await db
+    const [catalogueStats] = await db
       .select({
         total: sql<number>`count(*)::int`,
-        active: sql<number>`count(*) filter (where ${products.isActive})::int`,
-        stockValue: sql<number>`coalesce(sum(${products.stockQty} * ${products.purchasePrice}), 0)::float8`,
-        retailValue: sql<number>`coalesce(sum(${products.stockQty} * ${products.sellingPrice}), 0)::float8`,
+        active: sql<number>`count(*) filter (where ${catalogueItems.isActive})::int`,
       })
-      .from(products)
-      .where(eq(products.merchantId, merchantId));
+      .from(catalogueItems)
+      .where(eq(catalogueItems.merchantId, merchantId));
+
+    const [valueStats] = await db
+      .select({
+        stockValue: sql<number>`coalesce(sum(${inventoryItems.stockQty} * ${catalogueItems.purchasePrice}), 0)::float8`,
+        retailValue: sql<number>`coalesce(sum(${inventoryItems.stockQty} * ${catalogueItems.sellingPrice}), 0)::float8`,
+      })
+      .from(inventoryItems)
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
+      .where(eq(inventoryItems.merchantId, merchantId));
 
     const [categoryStats] = await db
       .select({ total: count() })
@@ -356,34 +500,42 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
     const [lowStockStats] = await db
       .select({ total: sql<number>`count(*)::int` })
-      .from(products)
+      .from(inventoryItems)
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
       .where(
         and(
-          eq(products.merchantId, merchantId),
-          eq(products.isActive, true),
-          gte(products.reorderLevel, sql`0.001`),
-          sql`${products.stockQty} <= ${products.reorderLevel}`,
+          eq(inventoryItems.merchantId, merchantId),
+          eq(catalogueItems.isActive, true),
+          gte(inventoryItems.reorderLevel, sql`0.001`),
+          sql`${inventoryItems.stockQty} <= ${inventoryItems.reorderLevel}`,
         ),
       );
 
     const lowStock = await db
       .select({
-        id: products.id,
-        name: products.name,
-        unit: products.unit,
-        stockQty: products.stockQty,
-        reorderLevel: products.reorderLevel,
+        id: inventoryItems.id,
+        name: catalogueItems.name,
+        unit: catalogueItems.unit,
+        stockQty: inventoryItems.stockQty,
+        reorderLevel: inventoryItems.reorderLevel,
       })
-      .from(products)
+      .from(inventoryItems)
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
       .where(
         and(
-          eq(products.merchantId, merchantId),
-          eq(products.isActive, true),
-          gte(products.reorderLevel, sql`0.001`),
-          sql`${products.stockQty} <= ${products.reorderLevel}`,
+          eq(inventoryItems.merchantId, merchantId),
+          eq(catalogueItems.isActive, true),
+          gte(inventoryItems.reorderLevel, sql`0.001`),
+          sql`${inventoryItems.stockQty} <= ${inventoryItems.reorderLevel}`,
         ),
       )
-      .orderBy(asc(products.stockQty), asc(products.name))
+      .orderBy(asc(inventoryItems.stockQty), asc(catalogueItems.name))
       .limit(8);
 
     const startOfDay = sql`date_trunc('day', now())`;
@@ -405,16 +557,23 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     const recentMovements = await db
       .select({
         id: stockMovements.id,
-        productId: stockMovements.productId,
-        productName: products.name,
+        productId: stockMovements.inventoryItemId,
+        productName: catalogueItems.name,
         type: stockMovements.type,
         quantity: stockMovements.quantity,
-        unit: products.unit,
+        unit: catalogueItems.unit,
         note: stockMovements.note,
         createdAt: stockMovements.createdAt,
       })
       .from(stockMovements)
-      .innerJoin(products, eq(products.id, stockMovements.productId))
+      .innerJoin(
+        inventoryItems,
+        eq(inventoryItems.id, stockMovements.inventoryItemId),
+      )
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
       .where(eq(stockMovements.merchantId, merchantId))
       .orderBy(desc(stockMovements.createdAt))
       .limit(8);
@@ -422,14 +581,14 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     return {
       merchant: merchant ?? null,
       counts: {
-        products: productStats?.total ?? 0,
-        activeProducts: productStats?.active ?? 0,
+        products: catalogueStats?.total ?? 0,
+        activeProducts: catalogueStats?.active ?? 0,
         categories: categoryStats?.total ?? 0,
         lowStock: lowStockStats?.total ?? 0,
       },
       value: {
-        cost: productStats?.stockValue ?? 0,
-        retail: productStats?.retailValue ?? 0,
+        cost: valueStats?.stockValue ?? 0,
+        retail: valueStats?.retailValue ?? 0,
         currency: merchant?.currency ?? "INR",
       },
       today: {
@@ -452,10 +611,10 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         id: categories.id,
         name: categories.name,
         parentId: categories.parentId,
-        productCount: sql<number>`count(${products.id})::int`,
+        productCount: sql<number>`count(${catalogueItems.id})::int`,
       })
       .from(categories)
-      .leftJoin(products, eq(products.categoryId, categories.id))
+      .leftJoin(catalogueItems, eq(catalogueItems.categoryId, categories.id))
       .where(eq(categories.merchantId, merchantId))
       .groupBy(categories.id)
       .orderBy(asc(categories.name));
@@ -551,101 +710,68 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     },
   );
 
-  // ---- Products -----------------------------------------------------------
+  // ---- Catalogue ----------------------------------------------------------
 
-  app.get("/api/merchant/products", { preHandler: scoped }, async (request) => {
+  app.get("/api/merchant/catalogue", { preHandler: scoped }, async (request) => {
     const merchantId = merchantIdOf(request);
     const query = request.query as {
       q?: string;
       categoryId?: string;
-      lowStock?: string;
       includeInactive?: string;
     };
 
-    const filters = [eq(products.merchantId, merchantId)];
+    const filters = [eq(catalogueItems.merchantId, merchantId)];
 
     const search = query.q?.trim();
     if (search) {
       const pattern = `%${search}%`;
       filters.push(
         or(
-          ilike(products.name, pattern),
-          ilike(products.sku, pattern),
-          ilike(products.barcode, pattern),
+          ilike(catalogueItems.name, pattern),
+          ilike(catalogueItems.sku, pattern),
+          ilike(catalogueItems.barcode, pattern),
         )!,
       );
     }
 
     if (query.categoryId) {
-      filters.push(eq(products.categoryId, query.categoryId));
-    }
-
-    if (query.lowStock === "true") {
-      filters.push(
-        gte(products.reorderLevel, sql`0.001`),
-        sql`${products.stockQty} <= ${products.reorderLevel}`,
-      );
+      filters.push(eq(catalogueItems.categoryId, query.categoryId));
     }
 
     if (query.includeInactive !== "true") {
-      filters.push(eq(products.isActive, true));
+      filters.push(eq(catalogueItems.isActive, true));
     }
 
     return db
-      .select({
-        ...getTableColumns(products),
-        categoryName: categories.name,
-      })
-      .from(products)
-      .leftJoin(categories, eq(categories.id, products.categoryId))
+      .select(catalogueSelect)
+      .from(catalogueItems)
+      .leftJoin(
+        inventoryItems,
+        eq(inventoryItems.catalogueItemId, catalogueItems.id),
+      )
+      .leftJoin(categories, eq(categories.id, catalogueItems.categoryId))
       .where(and(...filters))
-      .orderBy(asc(products.name));
+      .orderBy(asc(catalogueItems.name));
   });
 
-  app.post("/api/merchant/products", { preHandler: owner }, async (request, reply) => {
+  /**
+   * Creates a catalogue definition and an empty stock row. A definition can be
+   * added without stock, but every stocked product needs both rows.
+   */
+  app.post("/api/merchant/catalogue", { preHandler: owner }, async (request, reply) => {
     const merchantId = merchantIdOf(request);
-    const input = parse(productCreateInput, request.body, reply);
+    const input = parse(catalogueCreateInput, request.body, reply);
     if (!input) return;
 
-    // Opening stock writes a movement, so it needs the stock permission.
-    if (input.stockQty > 0 && !can(request, "stock")) {
-      return reply
-        .code(403)
-        .send({ error: "You do not have permission to add opening stock." });
-    }
+    const categoryId = await resolveCategoryFor(request, reply, merchantId, input);
+    if (categoryId === undefined) return;
 
-    let categoryId = input.categoryId ?? null;
-
-    // Readable SKUs are generated only when the merchant leaves the field blank.
     const sku = input.sku ?? (await generateSku(merchantId, input.name));
-
-    // `categoryName` wins so the product form can create a category inline.
-    if (input.categoryName) {
-      const resolved = await resolveCategoryName(
-        merchantId,
-        input.categoryName,
-        can(request, "categories"),
-      );
-      if (resolved.denied) {
-        return reply.code(403).send({
-          error:
-            "That category does not exist and you do not have permission to create one.",
-        });
-      }
-      categoryId = resolved.id;
-    } else if (categoryId) {
-      const [category] = await db
-        .select({ id: categories.id })
-        .from(categories)
-        .where(and(eq(categories.id, categoryId), eq(categories.merchantId, merchantId)))
-        .limit(1);
-      if (!category) return reply.code(400).send({ error: "Category not found" });
-    }
 
     try {
       const created = await db.transaction(async (tx) => {
-        const [product] = await tx
-          .insert(products)
+        const [catalogue] = await tx
+          .insert(catalogueItems)
           .values({
             merchantId,
             name: input.name,
@@ -657,27 +783,19 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
             taxRate: input.taxRate,
             purchasePrice: input.purchasePrice,
             sellingPrice: input.sellingPrice,
-            reorderLevel: input.reorderLevel,
             attributes: input.attributes ?? null,
-            stockQty: input.stockQty,
           })
           .returning();
 
-        if (input.stockQty > 0) {
-          await tx.insert(stockMovements).values({
-            merchantId,
-            productId: product.id,
-            type: "adjustment",
-            quantity: input.stockQty,
-            unitCost: input.purchasePrice || null,
-            note: "Opening stock",
-          });
-        }
+        await tx.insert(inventoryItems).values({
+          merchantId,
+          catalogueItemId: catalogue.id,
+        });
 
-        return product;
+        return catalogue;
       });
 
-      return reply.code(201).send(created);
+      return reply.code(201).send(await loadCatalogueRow(merchantId, created.id));
     } catch (error) {
       if (isUniqueViolation(error)) {
         return reply.code(409).send({ error: uniqueViolationMessage(error) });
@@ -687,98 +805,84 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>(
-    "/api/merchant/products/:id",
+    "/api/merchant/catalogue/:id",
     { preHandler: scoped },
     async (request, reply) => {
-      const merchantId = merchantIdOf(request);
-
-      const [product] = await db
-        .select({
-          ...getTableColumns(products),
-          categoryName: categories.name,
-        })
-        .from(products)
-        .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(
-          and(
-            eq(products.id, request.params.id),
-            eq(products.merchantId, merchantId),
-          ),
-        )
-        .limit(1);
-
-      if (!product) {
-        return reply.code(404).send({ error: "Not found" });
-      }
-
-      return product;
+      const row = await loadCatalogueRow(merchantIdOf(request), request.params.id);
+      if (!row) return notFound(reply);
+      return row;
     },
   );
 
   app.patch<{ Params: { id: string } }>(
-    "/api/merchant/products/:id",
+    "/api/merchant/catalogue/:id",
     { preHandler: owner },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
-      const input = parse(productUpdateInput, request.body, reply);
+      const input = parse(catalogueUpdateInput, request.body, reply);
       if (!input) return;
 
-      // Check first so a bad id cannot create a category as a side effect.
       const [existing] = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
+        .select({ id: catalogueItems.id })
+        .from(catalogueItems)
+        .where(
+          and(
+            eq(catalogueItems.id, request.params.id),
+            eq(catalogueItems.merchantId, merchantId),
+          ),
+        )
         .limit(1);
 
       if (!existing) return notFound(reply);
 
       const patch: Record<string, unknown> = Object.fromEntries(
-        Object.entries(input).filter(([, value]) => value !== undefined),
+        Object.entries(input).filter(
+          ([key, value]) => key !== "reorderLevel" && value !== undefined,
+        ),
       );
 
       // Never write the helper field; it is resolved into categoryId.
       delete patch.categoryName;
 
-      if (input.categoryName !== undefined) {
-        // An empty name clears the category, otherwise reuse or create it.
-        if (input.categoryName) {
-          const resolved = await resolveCategoryName(
-            merchantId,
-            input.categoryName,
-            can(request, "categories"),
-          );
-          if (resolved.denied) {
-            return reply.code(403).send({
-              error:
-                "That category does not exist and you do not have permission to create one.",
-            });
-          }
-          patch.categoryId = resolved.id;
-        } else {
-          patch.categoryId = null;
-        }
-      } else if (input.categoryId) {
-        const [category] = await db
-          .select({ id: categories.id })
-          .from(categories)
-          .where(and(eq(categories.id, input.categoryId), eq(categories.merchantId, merchantId)))
-          .limit(1);
-        if (!category) return reply.code(400).send({ error: "Category not found" });
+      if (input.categoryName !== undefined || input.categoryId !== undefined) {
+        const categoryId = await resolveCategoryFor(request, reply, merchantId, input);
+        if (categoryId === undefined) return;
+        patch.categoryId = categoryId;
       }
 
-      if (Object.keys(patch).length === 0) {
+      if (Object.keys(patch).length === 0 && input.reorderLevel === undefined) {
         return reply.code(400).send({ error: "No changes supplied" });
       }
 
       try {
-        const [updated] = await db
-          .update(products)
-          .set(patch)
-          .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
-          .returning();
+        await db.transaction(async (tx) => {
+          if (Object.keys(patch).length > 0) {
+            await tx
+              .update(catalogueItems)
+              .set(patch)
+              .where(
+                and(
+                  eq(catalogueItems.id, request.params.id),
+                  eq(catalogueItems.merchantId, merchantId),
+                ),
+              );
+          }
 
-        if (!updated) return notFound(reply);
-        return updated;
+          if (input.reorderLevel !== undefined) {
+            await tx
+              .update(inventoryItems)
+              .set({ reorderLevel: input.reorderLevel })
+              .where(
+                and(
+                  eq(inventoryItems.catalogueItemId, request.params.id),
+                  eq(inventoryItems.merchantId, merchantId),
+                ),
+              );
+          }
+        });
+
+        return (await loadCatalogueRow(merchantId, request.params.id)) ??
+          notFound(reply);
       } catch (error) {
         if (isUniqueViolation(error)) {
           return reply.code(409).send({ error: uniqueViolationMessage(error) });
@@ -788,28 +892,266 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     },
   );
 
-  /** Archives a product. Stock history is kept, so this is not a hard delete. */
+  /** Archives a catalogue item. Stock rows and movement history are kept. */
   app.delete<{ Params: { id: string } }>(
-    "/api/merchant/products/:id",
+    "/api/merchant/catalogue/:id",
     { preHandler: owner },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
 
       const [archived] = await db
-        .update(products)
+        .update(catalogueItems)
         .set({ isActive: false })
-        .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
-        .returning({ id: products.id });
+        .where(
+          and(
+            eq(catalogueItems.id, request.params.id),
+            eq(catalogueItems.merchantId, merchantId),
+          ),
+        )
+        .returning({ id: catalogueItems.id });
 
       if (!archived) return notFound(reply);
       return { id: archived.id, isActive: false };
     },
   );
 
+  // ---- Inventory ----------------------------------------------------------
+
+  app.get("/api/merchant/inventory", { preHandler: scoped }, async (request) => {
+    const merchantId = merchantIdOf(request);
+    const query = request.query as {
+      q?: string;
+      categoryId?: string;
+      lowStock?: string;
+      includeInactive?: string;
+    };
+
+    const filters = [eq(inventoryItems.merchantId, merchantId)];
+
+    const search = query.q?.trim();
+    if (search) {
+      const pattern = `%${search}%`;
+      filters.push(
+        or(
+          ilike(catalogueItems.name, pattern),
+          ilike(catalogueItems.sku, pattern),
+          ilike(catalogueItems.barcode, pattern),
+        )!,
+      );
+    }
+
+    if (query.categoryId) {
+      filters.push(eq(catalogueItems.categoryId, query.categoryId));
+    }
+
+    if (query.lowStock === "true") {
+      filters.push(
+        gte(inventoryItems.reorderLevel, sql`0.001`),
+        sql`${inventoryItems.stockQty} <= ${inventoryItems.reorderLevel}`,
+      );
+    }
+
+    if (query.includeInactive !== "true") {
+      filters.push(eq(catalogueItems.isActive, true));
+    }
+
+    return db
+      .select({ ...catalogueSelect, id: inventoryItems.id })
+      .from(inventoryItems)
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
+      .leftJoin(categories, eq(categories.id, catalogueItems.categoryId))
+      .where(and(...filters))
+      .orderBy(asc(catalogueItems.name));
+  });
+
+  app.post("/api/merchant/inventory", { preHandler: owner }, async (request, reply) => {
+    const merchantId = merchantIdOf(request);
+    const input = parse(inventoryCreateInput, request.body, reply);
+    if (!input) return;
+
+    // Opening stock writes a movement, so it needs the stock permission.
+    if (input.stockQty > 0 && !can(request, "stock")) {
+      return reply
+        .code(403)
+        .send({ error: "You do not have permission to add opening stock." });
+    }
+
+    const categoryId = await resolveCategoryFor(request, reply, merchantId, input);
+    if (categoryId === undefined) return;
+
+    // Readable SKUs are generated only when the merchant leaves the field blank.
+    const sku = input.sku ?? (await generateSku(merchantId, input.name));
+
+    try {
+      const created = await db.transaction(async (tx) => {
+        const [catalogue] = await tx
+          .insert(catalogueItems)
+          .values({
+            merchantId,
+            name: input.name,
+            categoryId,
+            sku,
+            barcode: input.barcode,
+            unit: input.unit,
+            hsnCode: input.hsnCode,
+            taxRate: input.taxRate,
+            purchasePrice: input.purchasePrice,
+            sellingPrice: input.sellingPrice,
+            attributes: input.attributes ?? null,
+          })
+          .returning();
+
+        const [stock] = await tx
+          .insert(inventoryItems)
+          .values({
+            merchantId,
+            catalogueItemId: catalogue.id,
+            stockQty: input.stockQty,
+            reorderLevel: input.reorderLevel,
+          })
+          .returning();
+
+        if (input.stockQty > 0) {
+          await tx.insert(stockMovements).values({
+            merchantId,
+            inventoryItemId: stock.id,
+            type: "adjustment",
+            quantity: input.stockQty,
+            unitCost: input.purchasePrice || null,
+            note: "Opening stock",
+          });
+        }
+
+        return stock.id;
+      });
+
+      return reply.code(201).send(await loadInventoryRow(merchantId, created));
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return reply.code(409).send({ error: uniqueViolationMessage(error) });
+      }
+      throw error;
+    }
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/api/merchant/inventory/:id",
+    { preHandler: scoped },
+    async (request, reply) => {
+      const row = await loadInventoryRow(
+        merchantIdOf(request),
+        request.params.id,
+      );
+      if (!row) return notFound(reply);
+      return row;
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/api/merchant/inventory/:id",
+    { preHandler: owner },
+    async (request, reply) => {
+      const merchantId = merchantIdOf(request);
+      const input = parse(inventoryUpdateInput, request.body, reply);
+      if (!input) return;
+
+      // Check first so a bad id cannot create a category as a side effect.
+      const [existing] = await db
+        .select({ catalogueItemId: inventoryItems.catalogueItemId })
+        .from(inventoryItems)
+        .where(
+          and(
+            eq(inventoryItems.id, request.params.id),
+            eq(inventoryItems.merchantId, merchantId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) return notFound(reply);
+
+      const patch: Record<string, unknown> = Object.fromEntries(
+        Object.entries(input).filter(
+          ([key, value]) => key !== "reorderLevel" && value !== undefined,
+        ),
+      );
+
+      // Never write the helper field; it is resolved into categoryId.
+      delete patch.categoryName;
+
+      if (input.categoryName !== undefined || input.categoryId !== undefined) {
+        const categoryId = await resolveCategoryFor(request, reply, merchantId, input);
+        if (categoryId === undefined) return;
+        patch.categoryId = categoryId;
+      }
+
+      if (Object.keys(patch).length === 0 && input.reorderLevel === undefined) {
+        return reply.code(400).send({ error: "No changes supplied" });
+      }
+
+      try {
+        await db.transaction(async (tx) => {
+          if (Object.keys(patch).length > 0) {
+            await tx
+              .update(catalogueItems)
+              .set(patch)
+              .where(eq(catalogueItems.id, existing.catalogueItemId));
+          }
+
+          if (input.reorderLevel !== undefined) {
+            await tx
+              .update(inventoryItems)
+              .set({ reorderLevel: input.reorderLevel })
+              .where(eq(inventoryItems.id, request.params.id));
+          }
+        });
+
+        return (await loadInventoryRow(merchantId, request.params.id)) ??
+          notFound(reply);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return reply.code(409).send({ error: uniqueViolationMessage(error) });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /** Archives the catalogue item behind an inventory row. */
+  app.delete<{ Params: { id: string } }>(
+    "/api/merchant/inventory/:id",
+    { preHandler: owner },
+    async (request, reply) => {
+      const merchantId = merchantIdOf(request);
+
+      const [row] = await db
+        .select({ catalogueItemId: inventoryItems.catalogueItemId })
+        .from(inventoryItems)
+        .where(
+          and(
+            eq(inventoryItems.id, request.params.id),
+            eq(inventoryItems.merchantId, merchantId),
+          ),
+        )
+        .limit(1);
+
+      if (!row) return notFound(reply);
+
+      await db
+        .update(catalogueItems)
+        .set({ isActive: false })
+        .where(eq(catalogueItems.id, row.catalogueItemId));
+
+      return { id: request.params.id, isActive: false };
+    },
+  );
+
   // ---- Stock --------------------------------------------------------------
 
   app.post<{ Params: { id: string } }>(
-    "/api/merchant/products/:id/stock",
+    "/api/merchant/inventory/:id/stock",
     { preHandler: stockMover },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
@@ -820,37 +1162,55 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
       try {
         const result = await db.transaction(async (tx) => {
-          const [product] = await tx
+          const [inventory] = await tx
             .select()
-            .from(products)
-            .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
+            .from(inventoryItems)
+            .where(
+              and(
+                eq(inventoryItems.id, request.params.id),
+                eq(inventoryItems.merchantId, merchantId),
+              ),
+            )
             .for("update")
             .limit(1);
 
-          if (!product) return null;
+          if (!inventory) return null;
 
-          if (!product.isActive) {
+          const [catalogue] = await tx
+            .select({
+              id: catalogueItems.id,
+              name: catalogueItems.name,
+              unit: catalogueItems.unit,
+              isActive: catalogueItems.isActive,
+            })
+            .from(catalogueItems)
+            .where(eq(catalogueItems.id, inventory.catalogueItemId))
+            .limit(1);
+
+          if (!catalogue) return null;
+
+          if (!catalogue.isActive) {
             throw new StockError("This product is archived. Restore it before moving stock.");
           }
 
-          const nextQty = product.stockQty + signed;
+          const nextQty = inventory.stockQty + signed;
           if (nextQty < 0) {
             throw new StockError(
-              `Only ${product.stockQty} ${product.unit} in stock, cannot remove ${input.quantity}`,
+              `Only ${inventory.stockQty} ${catalogue.unit} in stock, cannot remove ${input.quantity}`,
             );
           }
 
           const [updated] = await tx
-            .update(products)
+            .update(inventoryItems)
             .set({ stockQty: nextQty })
-            .where(eq(products.id, product.id))
+            .where(eq(inventoryItems.id, inventory.id))
             .returning();
 
           const [movement] = await tx
             .insert(stockMovements)
             .values({
               merchantId,
-              productId: product.id,
+              inventoryItemId: inventory.id,
               type: input.type,
               quantity: signed,
               unitCost: input.unitCost ?? null,
@@ -858,7 +1218,14 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
             })
             .returning();
 
-          return { product: updated, movement };
+          return {
+            product: {
+              ...updated,
+              name: catalogue.name,
+              unit: catalogue.unit,
+            },
+            movement,
+          };
         });
 
         if (!result) return notFound(reply);
@@ -873,15 +1240,28 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Params: { id: string } }>(
-    "/api/merchant/products/:id/movements",
+    "/api/merchant/inventory/:id/movements",
     { preHandler: stockMover },
     async (request, reply) => {
       const merchantId = merchantIdOf(request);
 
       const [product] = await db
-        .select({ id: products.id, name: products.name, unit: products.unit })
-        .from(products)
-        .where(and(eq(products.id, request.params.id), eq(products.merchantId, merchantId)))
+        .select({
+          id: inventoryItems.id,
+          name: catalogueItems.name,
+          unit: catalogueItems.unit,
+        })
+        .from(inventoryItems)
+        .innerJoin(
+          catalogueItems,
+          eq(catalogueItems.id, inventoryItems.catalogueItemId),
+        )
+        .where(
+          and(
+            eq(inventoryItems.id, request.params.id),
+            eq(inventoryItems.merchantId, merchantId),
+          ),
+        )
         .limit(1);
 
       if (!product) return notFound(reply);
@@ -891,7 +1271,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         .from(stockMovements)
         .where(
           and(
-            eq(stockMovements.productId, product.id),
+            eq(stockMovements.inventoryItemId, product.id),
             eq(stockMovements.merchantId, merchantId),
           ),
         )
@@ -910,9 +1290,9 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     return db
       .select({
         id: stockMovements.id,
-        productId: stockMovements.productId,
-        productName: products.name,
-        unit: products.unit,
+        productId: stockMovements.inventoryItemId,
+        productName: catalogueItems.name,
+        unit: catalogueItems.unit,
         type: stockMovements.type,
         quantity: stockMovements.quantity,
         unitCost: stockMovements.unitCost,
@@ -920,7 +1300,14 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         createdAt: stockMovements.createdAt,
       })
       .from(stockMovements)
-      .innerJoin(products, eq(products.id, stockMovements.productId))
+      .innerJoin(
+        inventoryItems,
+        eq(inventoryItems.id, stockMovements.inventoryItemId),
+      )
+      .innerJoin(
+        catalogueItems,
+        eq(catalogueItems.id, inventoryItems.catalogueItemId),
+      )
       .where(eq(stockMovements.merchantId, merchantId))
       .orderBy(desc(stockMovements.createdAt))
       .limit(limit);

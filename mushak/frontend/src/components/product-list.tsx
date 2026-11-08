@@ -15,7 +15,23 @@ import { usePermissions } from "@/lib/permissions";
 import type { Category, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export default function Products() {
+type Props = {
+  /**
+   * inventory — on-hand stock: quantities, values and stock movements.
+   * catalogue — product definitions: names, prices, SKU and GST.
+   */
+  variant: "inventory" | "catalogue";
+};
+
+/**
+ * Shared product workspace for the Inventory and Catalogue tabs.
+ *
+ * One implementation keeps the list, filters and dialogs identical between the
+ * two screens; `variant` decides the columns and the row actions.
+ */
+export default function ProductList({ variant }: Props) {
+  const inventory = variant === "inventory";
+  const basePath = inventory ? "/api/merchant/inventory" : "/api/merchant/catalogue";
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { can } = usePermissions();
@@ -46,7 +62,7 @@ export default function Products() {
     api<Category[]>("/api/merchant/categories")
       .then(setCategories)
       .catch(() => {
-        // The product list still works without categories.
+        // The list still works without categories.
       });
   }, []);
 
@@ -56,29 +72,30 @@ export default function Products() {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
     if (categoryId) params.set("categoryId", categoryId);
-    if (lowStock) params.set("lowStock", "true");
+    if (inventory && lowStock) params.set("lowStock", "true");
     if (includeInactive) params.set("includeInactive", "true");
 
     setLoading(true);
     setError(null);
 
-    api<Product[]>(`/api/merchant/products?${params.toString()}`)
+    api<Product[]>(`${basePath}?${params.toString()}`)
       .then(setProducts)
       .catch((cause: unknown) => setError(errorMessage(cause)))
       .finally(() => setLoading(false));
-  }, [query, categoryId, lowStock, includeInactive]);
+  }, [basePath, inventory, query, categoryId, lowStock, includeInactive]);
 
   useEffect(load, [load]);
 
-  async function archive(product: Product) {
-    setArchiveFor(product);
+  /** Both tabs add through the same dialog, so the label never changes. */
+  function addProduct() {
+    setEditing("new");
   }
 
   async function confirmArchive() {
     if (!archiveFor) return;
 
     try {
-      await api(`/api/merchant/products/${archiveFor.id}`, { method: "DELETE" });
+      await api(`${basePath}/${archiveFor.id}`, { method: "DELETE" });
       setArchiveFor(null);
       load();
     } catch (cause) {
@@ -88,7 +105,7 @@ export default function Products() {
 
   async function restore(product: Product) {
     try {
-      await api(`/api/merchant/products/${product.id}`, {
+      await api(`${basePath}/${product.id}`, {
         method: "PATCH",
         body: { isActive: true },
       });
@@ -98,21 +115,24 @@ export default function Products() {
     }
   }
 
+  const title = inventory ? "Inventory" : "Catalogue";
+  const description = inventory
+    ? canStock
+      ? "On-hand stock, values and reorder levels. Adding a product here also puts it in the catalogue."
+      : "On-hand stock and reorder levels for this shop."
+    : canEdit
+      ? "Product definitions, prices, SKU and GST for this shop."
+      : canStock
+        ? "You can view the catalogue and move stock. The catalogue is managed by the shop owner."
+        : "You can view the catalogue. Ask the shop owner for stock or catalogue access.";
+
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Products"
-        description={
-          canEdit
-            ? "Catalogue, prices and stock for this shop."
-            : canStock
-              ? "You can view products and move stock. The catalogue is managed by the shop owner."
-              : "You can view the catalogue. Ask the shop owner for stock or catalogue access."
-        }
+        title={title}
+        description={description}
         actions={
-          canEdit ? (
-            <Button onClick={() => setEditing("new")}>Add product</Button>
-          ) : null
+          canEdit ? <Button onClick={addProduct}>Add product</Button> : null
         }
       />
 
@@ -138,15 +158,17 @@ export default function Products() {
           ))}
         </Select>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            className="size-4 accent-primary"
-            checked={lowStock}
-            onChange={(event) => setLowStock(event.target.checked)}
-          />
-          Low stock only
-        </label>
+        {inventory ? (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={lowStock}
+              onChange={(event) => setLowStock(event.target.checked)}
+            />
+            Low stock only
+          </label>
+        ) : null}
 
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
@@ -171,7 +193,9 @@ export default function Products() {
             <tr>
               <th className="px-4 py-2.5 font-medium">Product</th>
               <th className="px-4 py-2.5 font-medium">Category</th>
-              <th className="px-4 py-2.5 font-medium">Stock</th>
+              {inventory ? (
+                <th className="px-4 py-2.5 font-medium">Stock</th>
+              ) : null}
               <th className="px-4 py-2.5 text-right font-medium">Purchase</th>
               <th className="px-4 py-2.5 text-right font-medium">Selling</th>
               <th className="px-4 py-2.5 text-right font-medium">GST</th>
@@ -181,8 +205,7 @@ export default function Products() {
           <tbody>
             {products.map((product) => {
               const low =
-                product.reorderLevel > 0 &&
-                product.stockQty <= product.reorderLevel;
+                product.reorderLevel > 0 && product.stockQty <= product.reorderLevel;
 
               return (
                 <tr
@@ -204,19 +227,21 @@ export default function Products() {
                   <td className="px-4 py-2.5 text-muted-foreground">
                     {product.categoryName ?? "—"}
                   </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          low && "font-medium text-amber-700 dark:text-amber-400",
-                        )}
-                      >
-                        {qty(product.stockQty)} {product.unit}
-                      </span>
-                      {low ? <Badge variant="warning">Low</Badge> : null}
-                    </div>
-                  </td>
+                  {inventory ? (
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            low && "font-medium text-amber-700 dark:text-amber-400",
+                          )}
+                        >
+                          {qty(product.stockQty)} {product.unit}
+                        </span>
+                        {low ? <Badge variant="warning">Low</Badge> : null}
+                      </div>
+                    </td>
+                  ) : null}
                   <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
                     {money(product.purchasePrice)}
                   </td>
@@ -228,53 +253,72 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => navigate(`/app/products/${product.id}`)}
-                      >
-                        View
-                      </Button>
-
-                      {canStock && product.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setStockFor(product)}
-                        >
-                          Stock
-                        </Button>
-                      ) : null}
-
-                      {canEdit && product.isActive ? (
+                      {inventory ? (
                         <>
+                          {canStock && product.isActive ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setStockFor(product)}
+                            >
+                              Stock
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditing(product)}
+                            onClick={() => navigate(`/app/inventory/${product.id}`)}
                           >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground"
-                            onClick={() => void archive(product)}
-                          >
-                            Archive
+                            View
                           </Button>
                         </>
-                      ) : null}
+                      ) : (
+                        <>
+                          {canEdit && product.isActive ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditing(product)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-muted-foreground"
+                                onClick={() => setArchiveFor(product)}
+                              >
+                                Archive
+                              </Button>
+                            </>
+                          ) : null}
 
-                      {canEdit && !product.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void restore(product)}
-                        >
-                          Restore
-                        </Button>
-                      ) : null}
+                          {canEdit && !product.isActive ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void restore(product)}
+                            >
+                              Restore
+                            </Button>
+                          ) : null}
+
+                          {!canEdit ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                navigate(
+                                  `/app/inventory/${product.inventoryItemId ?? product.id}`,
+                                )
+                              }
+                            >
+                              View
+                            </Button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -288,7 +332,7 @@ export default function Products() {
             {query || categoryId || lowStock
               ? "No products match these filters."
               : canEdit
-                ? "No products yet. Add the first one to start tracking stock."
+                ? "Nothing here yet. Add the first product to get started."
                 : "No products yet."}
           </p>
         ) : null}
@@ -304,6 +348,7 @@ export default function Products() {
         <ProductDialog
           key={editing === "new" ? "new" : editing.id}
           product={editing === "new" ? null : editing}
+          resource={variant}
           categories={categories}
           canCreateCategories={can("categories")}
           canSetOpeningStock={canStock}
@@ -311,20 +356,8 @@ export default function Products() {
           onSaved={() => {
             setEditing(null);
             load();
-            // A new category may have been typed in the dialog.
             loadCategories();
           }}
-        />
-      ) : null}
-
-      {archiveFor ? (
-        <ConfirmDialog
-          open={archiveFor !== null}
-          onClose={() => setArchiveFor(null)}
-          title="Archive product"
-          description={`Archive "${archiveFor.name}"? It disappears from the product list and stock history is kept.`}
-          confirmLabel="Archive"
-          onConfirm={() => void confirmArchive()}
         />
       ) : null}
 
@@ -339,6 +372,19 @@ export default function Products() {
           }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={archiveFor !== null}
+        onClose={() => setArchiveFor(null)}
+        title="Archive product"
+        description={
+          archiveFor
+            ? `Archive "${archiveFor.name}"? It disappears from the list and stock history is kept.`
+            : undefined
+        }
+        confirmLabel="Archive"
+        onConfirm={() => void confirmArchive()}
+      />
     </div>
   );
 }

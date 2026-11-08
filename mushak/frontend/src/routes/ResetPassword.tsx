@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
 
 export default function ResetPassword() {
@@ -98,9 +98,8 @@ export default function ResetPassword() {
               <label className="text-sm font-medium" htmlFor="password">
                 New password
               </label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 autoFocus
                 value={password}
@@ -114,9 +113,8 @@ export default function ResetPassword() {
               <label className="text-sm font-medium" htmlFor="confirm">
                 Confirm password
               </label>
-              <Input
+              <PasswordInput
                 id="confirm"
-                type="password"
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(event) => setConfirm(event.target.value)}

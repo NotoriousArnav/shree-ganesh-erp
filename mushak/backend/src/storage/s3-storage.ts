@@ -7,6 +7,7 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
   S3ServiceException,
@@ -38,6 +39,11 @@ export type S3StorageOptions = {
    * otherwise.
    */
   publicUrl?: string;
+  /**
+   * Browser origins allowed to PUT presigned uploads directly to the bucket.
+   * A CORS policy is written on first use so uploads work from the shop UI.
+   */
+  corsOrigins?: string[];
 };
 
 /**
@@ -50,12 +56,14 @@ export class S3Storage extends AbstractStorage {
 
   private readonly client: S3Client;
   private readonly publicUrl?: string;
+  private readonly corsOrigins: string[];
   private bucketReady: Promise<void> | null = null;
 
   constructor(options: S3StorageOptions) {
     super();
     this.bucket = options.bucket;
     this.publicUrl = options.publicUrl?.replace(/\/+$/, "");
+    this.corsOrigins = options.corsOrigins ?? [];
     this.client = new S3Client({
       region: options.region,
       endpoint: options.endpoint,
@@ -230,16 +238,50 @@ export class S3Storage extends AbstractStorage {
 
   private ensureBucket(): Promise<void> {
     if (!this.bucketReady) {
-      this.bucketReady = this.createBucket().catch((error: unknown) => {
-        // Lost a race with another process creating the same bucket.
-        if (!isBucketExists(error)) {
-          this.bucketReady = null;
-          throw error;
-        }
-      });
+      this.bucketReady = this.createBucket()
+        .then(() => this.configureCors())
+        .catch((error: unknown) => {
+          // Lost a race with another process creating the same bucket.
+          if (!isBucketExists(error)) {
+            this.bucketReady = null;
+            throw error;
+          }
+        });
     }
 
     return this.bucketReady;
+  }
+
+  /**
+   * Writes the bucket CORS policy so browsers can PUT presigned uploads and
+   * read thumbnails. Failure is logged but not fatal: server-side uploads and
+   * presigned downloads still work without it.
+   */
+  private async configureCors(): Promise<void> {
+    if (this.corsOrigins.length === 0) return;
+
+    try {
+      await this.client.send(
+        new PutBucketCorsCommand({
+          Bucket: this.bucket,
+          CORSConfiguration: {
+            CORSRules: [
+              {
+                AllowedOrigins: this.corsOrigins,
+                AllowedMethods: ["GET", "PUT", "HEAD"],
+                AllowedHeaders: ["*"],
+                ExposeHeaders: ["ETag"],
+                MaxAgeSeconds: 3600,
+              },
+            ],
+          },
+        }),
+      );
+    } catch (error) {
+      console.warn(
+        `Could not set CORS on bucket "${this.bucket}": ${(error as Error).message}`,
+      );
+    }
   }
 
   private async createBucket(): Promise<void> {

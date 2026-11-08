@@ -89,10 +89,12 @@ const catalogueSelect = {
   purchasePrice: catalogueItems.purchasePrice,
   sellingPrice: catalogueItems.sellingPrice,
   attributes: catalogueItems.attributes,
+  imageKey: catalogueItems.imageKey,
   isActive: catalogueItems.isActive,
   createdAt: catalogueItems.createdAt,
   updatedAt: catalogueItems.updatedAt,
   inventoryItemId: inventoryItems.id,
+  inventoryImageKey: inventoryItems.imageKey,
   stockQty: sql<number>`coalesce(${inventoryItems.stockQty}, 0)::float8`,
   reorderLevel: sql<number>`coalesce(${inventoryItems.reorderLevel}, 0)::float8`,
   categoryName: categories.name,
@@ -291,6 +293,28 @@ const optionalText = (max = 120) =>
 const money = z.coerce.number().min(0).max(10_000_000).default(0);
 const quantity = z.coerce.number().min(0).max(10_000_000).default(0);
 
+/** Object-storage key for an image; checked against the merchant prefix. */
+const imageKeyField = optionalText(1024);
+
+/** True when an object key sits under the merchant's own storage prefix. */
+function isScopedImageKey(merchantId: string, key: string) {
+  return key.startsWith(`${merchantId}/`) && !key.includes("..");
+}
+
+/** Sends a 400 and returns false when an image key belongs to another tenant. */
+function validateImageKey(
+  merchantId: string,
+  key: string | null | undefined,
+  reply: FastifyReply,
+): boolean {
+  if (!key || isScopedImageKey(merchantId, key)) return true;
+
+  reply.code(400).send({
+    error: "The image key must stay inside the merchant's own storage prefix.",
+  });
+  return false;
+}
+
 const units = [
   "pcs",
   "kg",
@@ -324,7 +348,10 @@ const catalogueFields = {
 /** Reorder level belongs to the stock row, not the catalogue definition. */
 const reorderLevel = quantity;
 
-const catalogueCreateInput = z.object(catalogueFields);
+const catalogueCreateInput = z.object({
+  ...catalogueFields,
+  imageKey: imageKeyField,
+});
 
 const catalogueUpdateInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(160).optional(),
@@ -339,6 +366,7 @@ const catalogueUpdateInput = z.object({
   purchasePrice: z.coerce.number().min(0).max(10_000_000).optional(),
   sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
   attributes: z.record(z.string(), z.string()).nullish(),
+  imageKey: imageKeyField,
   isActive: z.boolean().optional(),
   /** Convenience: updates the linked stock row in the same transaction. */
   reorderLevel: reorderLevel.optional(),
@@ -346,6 +374,8 @@ const catalogueUpdateInput = z.object({
 
 const inventoryCreateInput = z.object({
   ...catalogueFields,
+  /** Picture for this stock row; the catalogue definition keeps its own. */
+  inventoryImageKey: imageKeyField,
   /** Opening stock; recorded as an adjustment so history stays complete. */
   stockQty: quantity,
   reorderLevel,
@@ -353,6 +383,7 @@ const inventoryCreateInput = z.object({
 
 const inventoryUpdateInput = z.object({
   ...catalogueUpdateInput.shape,
+  inventoryImageKey: imageKeyField,
 });
 
 const categoryInput = z.object({
@@ -422,11 +453,15 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         gstin: z.string().trim().max(20).nullish(),
         currency: z.string().trim().max(8).optional(),
         address: z.record(z.string(), z.string()).nullish(),
+        /** Optional object-storage key for the shop profile picture. */
+        profileImageKey: imageKeyField,
       }),
       request.body,
       reply,
     );
     if (!input) return;
+
+    if (!validateImageKey(merchantId, input.profileImageKey, reply)) return;
 
     const patch: Record<string, unknown> = {};
     if (input.name !== undefined) patch.name = input.name;
@@ -434,6 +469,9 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     if (input.gstin !== undefined) patch.gstin = input.gstin;
     if (input.currency !== undefined) patch.currency = input.currency;
     if (input.address !== undefined) patch.address = input.address;
+    if (input.profileImageKey !== undefined) {
+      patch.profileImageKey = input.profileImageKey;
+    }
 
     if (Object.keys(patch).length === 0) {
       return reply.code(400).send({ error: "No changes supplied" });
@@ -763,6 +801,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     const input = parse(catalogueCreateInput, request.body, reply);
     if (!input) return;
 
+    if (!validateImageKey(merchantId, input.imageKey, reply)) return;
+
     const categoryId = await resolveCategoryFor(request, reply, merchantId, input);
     if (categoryId === undefined) return;
 
@@ -784,6 +824,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
             purchasePrice: input.purchasePrice,
             sellingPrice: input.sellingPrice,
             attributes: input.attributes ?? null,
+            imageKey: input.imageKey ?? null,
           })
           .returning();
 
@@ -821,6 +862,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       const merchantId = merchantIdOf(request);
       const input = parse(catalogueUpdateInput, request.body, reply);
       if (!input) return;
+
+      if (!validateImageKey(merchantId, input.imageKey, reply)) return;
 
       const [existing] = await db
         .select({ id: catalogueItems.id })
@@ -972,6 +1015,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     const input = parse(inventoryCreateInput, request.body, reply);
     if (!input) return;
 
+    if (!validateImageKey(merchantId, input.inventoryImageKey, reply)) return;
+
     // Opening stock writes a movement, so it needs the stock permission.
     if (input.stockQty > 0 && !can(request, "stock")) {
       return reply
@@ -1011,6 +1056,7 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
             catalogueItemId: catalogue.id,
             stockQty: input.stockQty,
             reorderLevel: input.reorderLevel,
+            imageKey: input.inventoryImageKey ?? null,
           })
           .returning();
 
@@ -1058,6 +1104,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       const input = parse(inventoryUpdateInput, request.body, reply);
       if (!input) return;
 
+      if (!validateImageKey(merchantId, input.inventoryImageKey, reply)) return;
+
       // Check first so a bad id cannot create a category as a side effect.
       const [existing] = await db
         .select({ catalogueItemId: inventoryItems.catalogueItemId })
@@ -1072,8 +1120,10 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
       if (!existing) return notFound(reply);
 
+      const { inventoryImageKey, ...definitionInput } = input;
+
       const patch: Record<string, unknown> = Object.fromEntries(
-        Object.entries(input).filter(
+        Object.entries(definitionInput).filter(
           ([key, value]) => key !== "reorderLevel" && value !== undefined,
         ),
       );
@@ -1087,7 +1137,11 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
         patch.categoryId = categoryId;
       }
 
-      if (Object.keys(patch).length === 0 && input.reorderLevel === undefined) {
+      if (
+        Object.keys(patch).length === 0 &&
+        input.reorderLevel === undefined &&
+        inventoryImageKey === undefined
+      ) {
         return reply.code(400).send({ error: "No changes supplied" });
       }
 
@@ -1100,10 +1154,18 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
               .where(eq(catalogueItems.id, existing.catalogueItemId));
           }
 
+          const stockPatch: Record<string, unknown> = {};
           if (input.reorderLevel !== undefined) {
+            stockPatch.reorderLevel = input.reorderLevel;
+          }
+          if (inventoryImageKey !== undefined) {
+            stockPatch.imageKey = inventoryImageKey;
+          }
+
+          if (Object.keys(stockPatch).length > 0) {
             await tx
               .update(inventoryItems)
-              .set({ reorderLevel: input.reorderLevel })
+              .set(stockPatch)
               .where(eq(inventoryItems.id, request.params.id));
           }
         });

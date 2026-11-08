@@ -1,5 +1,6 @@
 import { S3Storage } from "./s3-storage.js";
 import type { AbstractStorage } from "./storage.js";
+import { buildTrustedOrigins } from "../http/origins.js";
 
 export { AbstractStorage } from "./storage.js";
 export type {
@@ -85,6 +86,7 @@ export function getStorage(): AbstractStorage {
     forcePathStyle:
       (process.env.S3_FORCE_PATH_STYLE ?? "true").toLowerCase() !== "false",
     publicUrl: process.env.S3_PUBLIC_URL?.trim() || undefined,
+    corsOrigins: buildTrustedOrigins(),
   });
 
   return storage;

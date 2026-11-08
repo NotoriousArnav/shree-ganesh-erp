@@ -8,22 +8,34 @@ import type { Profile } from "./types";
  * Pages read permissions from here instead of trusting `session.user.role`,
  * because a staff account can be limited without changing its role.
  */
-const MerchantProfileContext = createContext<Profile | null>(null);
+type MerchantProfileValue = {
+  profile: Profile | null;
+  /** Re-reads the profile after a Settings save. */
+  refresh: () => Promise<void>;
+};
+
+const MerchantProfileContext = createContext<MerchantProfileValue | null>(null);
 
 export function MerchantProfileProvider({
   profile,
+  refresh,
   children,
 }: {
   profile: Profile | null;
+  refresh: () => Promise<void>;
   children: ReactNode;
 }) {
   return (
-    <MerchantProfileContext.Provider value={profile}>
+    <MerchantProfileContext.Provider value={{ profile, refresh }}>
       {children}
     </MerchantProfileContext.Provider>
   );
 }
 
 export function useMerchantProfile() {
-  return useContext(MerchantProfileContext);
+  return useContext(MerchantProfileContext)?.profile ?? null;
+}
+
+export function useRefreshMerchantProfile() {
+  return useContext(MerchantProfileContext)?.refresh ?? (async () => {});
 }

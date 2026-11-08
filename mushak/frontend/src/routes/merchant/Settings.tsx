@@ -1,15 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import PageHeader from "@/components/page-header";
+import ImageField from "@/components/image-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, errorMessage } from "@/lib/api";
-import { useMerchantProfile } from "@/lib/merchant-context";
+import {
+  useMerchantProfile,
+  useRefreshMerchantProfile,
+} from "@/lib/merchant-context";
 import { usePermissions } from "@/lib/permissions";
 
 export default function Settings() {
   const profile = useMerchantProfile();
+  const refreshProfile = useRefreshMerchantProfile();
   const { isMerchant } = usePermissions();
   const merchant = profile?.merchant ?? null;
 
@@ -17,6 +22,9 @@ export default function Settings() {
   const [phone, setPhone] = useState(merchant?.phone ?? "");
   const [gstin, setGstin] = useState(merchant?.gstin ?? "");
   const [currency, setCurrency] = useState(merchant?.currency ?? "INR");
+  const [profileImageKey, setProfileImageKey] = useState<string | null>(
+    merchant?.profileImageKey ?? null,
+  );
   const [line1, setLine1] = useState("");
   const [line2, setLine2] = useState("");
   const [city, setCity] = useState("");
@@ -33,6 +41,7 @@ export default function Settings() {
     setPhone(merchant.phone ?? "");
     setGstin(merchant.gstin ?? "");
     setCurrency(merchant.currency);
+    setProfileImageKey(merchant.profileImageKey ?? null);
     setLine1(merchant.address?.line1 ?? "");
     setLine2(merchant.address?.line2 ?? "");
     setCity(merchant.address?.city ?? "");
@@ -69,9 +78,13 @@ export default function Settings() {
           ...(gstin.trim() ? { gstin: gstin.trim() } : { gstin: null }),
           ...(currency.trim() ? { currency: currency.trim().toUpperCase() } : {}),
           address: Object.keys(address).length > 0 ? address : null,
+          profileImageKey,
         },
       });
 
+      // The sidebar and mobile header read the shared profile, so show the new
+      // picture and shop name without a page reload.
+      await refreshProfile();
       setSaved(true);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -100,6 +113,15 @@ export default function Settings() {
       />
 
       <form className="max-w-2xl space-y-4 rounded-lg border bg-background p-5" onSubmit={onSubmit}>
+        <ImageField
+          value={profileImageKey}
+          onChange={setProfileImageKey}
+          label="Profile picture"
+          prefix="profile"
+          shape="circle"
+          hint="Optional. Shown next to the shop name."
+        />
+
         <div className="space-y-1.5">
           <Label htmlFor="settings-name">Shop name</Label>
           <Input

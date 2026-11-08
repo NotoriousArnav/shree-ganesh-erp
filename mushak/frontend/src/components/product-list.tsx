@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { api, errorMessage } from "@/lib/api";
 import { money, qty } from "@/lib/format";
+import { imageSrc } from "@/lib/images";
 import { usePermissions } from "@/lib/permissions";
 import type { Category, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -194,11 +195,16 @@ export default function ProductList({ variant }: Props) {
               <th className="px-4 py-2.5 font-medium">Product</th>
               <th className="px-4 py-2.5 font-medium">Category</th>
               {inventory ? (
-                <th className="px-4 py-2.5 font-medium">Stock</th>
+                <>
+                  <th className="px-4 py-2.5 font-medium">Stock</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Purchase</th>
+                </>
               ) : null}
-              <th className="px-4 py-2.5 text-right font-medium">Purchase</th>
               <th className="px-4 py-2.5 text-right font-medium">Selling</th>
               <th className="px-4 py-2.5 text-right font-medium">GST</th>
+              {inventory ? null : (
+                <th className="px-4 py-2.5 font-medium">Unit</th>
+              )}
               <th className="px-4 py-2.5 text-right font-medium">Actions</th>
             </tr>
           </thead>
@@ -206,6 +212,11 @@ export default function ProductList({ variant }: Props) {
             {products.map((product) => {
               const low =
                 product.reorderLevel > 0 && product.stockQty <= product.reorderLevel;
+              const thumbnail = imageSrc(
+                inventory
+                  ? (product.inventoryImageKey ?? product.imageKey)
+                  : product.imageKey,
+              );
 
               return (
                 <tr
@@ -213,16 +224,33 @@ export default function ProductList({ variant }: Props) {
                   className={cn("border-t", !product.isActive && "bg-muted/30")}
                 >
                   <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{product.name}</span>
-                      {!product.isActive ? (
-                        <Badge variant="secondary">Archived</Badge>
-                      ) : null}
+                    <div className="flex items-center gap-3">
+                      {thumbnail ? (
+                        <img
+                          src={thumbnail}
+                          alt=""
+                          loading="lazy"
+                          className="size-10 shrink-0 rounded-md border object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted text-xs font-medium text-muted-foreground">
+                          {product.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{product.name}</span>
+                          {!product.isActive ? (
+                            <Badge variant="secondary">Archived</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {product.sku ?? "No SKU"}
+                          {product.barcode ? ` · ${product.barcode}` : ""}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {product.sku ?? "No SKU"}
-                      {product.barcode ? ` · ${product.barcode}` : ""}
-                    </p>
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">
                     {product.categoryName ?? "—"}
@@ -242,15 +270,22 @@ export default function ProductList({ variant }: Props) {
                       </div>
                     </td>
                   ) : null}
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {money(product.purchasePrice)}
-                  </td>
+                  {inventory ? (
+                    <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                      {money(product.purchasePrice)}
+                    </td>
+                  ) : null}
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {money(product.sellingPrice)}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
                     {product.taxRate}%
                   </td>
+                  {inventory ? null : (
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {product.unit}
+                    </td>
+                  )}
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
                       {inventory ? (

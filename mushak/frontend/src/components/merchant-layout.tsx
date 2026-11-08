@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
 import { api, errorMessage } from "@/lib/api";
+import { imageSrc } from "@/lib/images";
 import { authClient } from "@/lib/auth-client";
 import { MerchantProfileProvider } from "@/lib/merchant-context";
 import {
@@ -50,23 +51,20 @@ export default function MerchantLayout() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    api<Profile>("/api/merchant/profile")
-      .then((result) => {
-        if (!cancelled) setProfile(result);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(errorMessage(cause));
-      });
-
-    return () => {
-      cancelled = true;
-    };
+  const loadProfile = useCallback(async () => {
+    try {
+      setProfile(await api<Profile>("/api/merchant/profile"));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
   }, []);
 
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
   const shopName = profile?.merchant?.name ?? "Your shop";
+  const shopImage = imageSrc(profile?.merchant?.profileImageKey);
   const userName = profile?.user.name ?? session?.user.name ?? "Account";
   const role = profile?.user.role ?? session?.user.role ?? "";
   const permissions: StaffPermission[] =
@@ -88,11 +86,15 @@ export default function MerchantLayout() {
     <div className="min-h-screen bg-muted/30">
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r bg-background md:flex">
         <div className="flex items-center gap-3 border-b px-5 py-4">
-          <img
-            src="/brand/mushak.png"
-            alt=""
-            className="h-9 w-auto"
-          />
+          {shopImage ? (
+            <img
+              src={shopImage}
+              alt=""
+              className="size-9 shrink-0 rounded-full border object-cover"
+            />
+          ) : (
+            <img src="/brand/mushak.png" alt="" className="h-9 w-auto" />
+          )}
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{shopName}</p>
             <p className="text-xs text-muted-foreground">Mushak inventory</p>
@@ -148,7 +150,15 @@ export default function MerchantLayout() {
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              <img src="/brand/mushak.png" alt="" className="h-8 w-auto" />
+              {shopImage ? (
+                <img
+                  src={shopImage}
+                  alt=""
+                  className="size-8 shrink-0 rounded-full border object-cover"
+                />
+              ) : (
+                <img src="/brand/mushak.png" alt="" className="h-8 w-auto" />
+              )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{shopName}</p>
                 <p className="text-xs text-muted-foreground">
@@ -196,7 +206,7 @@ export default function MerchantLayout() {
               {error}
             </p>
           ) : null}
-          <MerchantProfileProvider profile={profile}>
+          <MerchantProfileProvider profile={profile} refresh={loadProfile}>
             <Outlet />
           </MerchantProfileProvider>
         </main>

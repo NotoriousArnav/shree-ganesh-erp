@@ -29,6 +29,13 @@
       "when": 1794131031358,
       "tag": "0003_catalogue_inventory_split",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794131921018,
+      "tag": "0004_add_images",
+      "breakpoints": true
     }
   ]
 }

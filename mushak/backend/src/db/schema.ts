@@ -50,6 +50,8 @@ export const merchants = pgTable(
     currency: text("currency").default("INR").notNull(),
     // Free-form address: line1, line2, city, state, pincode.
     address: jsonb("address").$type<Record<string, string>>(),
+    /** Optional object-storage key for the shop's profile picture. */
+    profileImageKey: text("profile_image_key"),
     ...timestamps,
   },
   (t) => [uniqueIndex("merchants_slug_idx").on(t.slug)],
@@ -109,6 +111,8 @@ export const catalogueItems = pgTable(
       .notNull(),
     /** Optional per-vertical fields (brand, author, size, colour, ...). */
     attributes: jsonb("attributes").$type<Record<string, string>>(),
+    /** Optional object-storage key for the product picture. */
+    imageKey: text("image_key"),
     isActive: boolean("is_active").default(true).notNull(),
     ...timestamps,
   },
@@ -152,6 +156,8 @@ export const inventoryItems = pgTable(
     })
       .default(0)
       .notNull(),
+    /** Optional object-storage key for this stock row's picture. */
+    imageKey: text("image_key"),
     ...timestamps,
   },
   (t) => [

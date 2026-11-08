@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import ImageField from "@/components/image-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -64,6 +65,9 @@ export default function ProductDialog({
     String(product?.reorderLevel ?? 0),
   );
   const [openingStock, setOpeningStock] = useState("0");
+  const [imageKey, setImageKey] = useState<string | null>(
+    inventory ? (product?.inventoryImageKey ?? null) : (product?.imageKey ?? null),
+  );
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +92,8 @@ export default function ProductDialog({
       taxRate: Number(taxRate) || 0,
       purchasePrice: Number(purchasePrice) || 0,
       sellingPrice: Number(sellingPrice) || 0,
+      // The inventory and catalogue rows each keep their own picture.
+      ...(inventory ? { inventoryImageKey: imageKey } : { imageKey }),
       // Reorder levels belong to the stock row, so only send them where it
       // exists or the API accepts them.
       ...(inventory || !isNew ? { reorderLevel: Number(reorderLevel) || 0 } : {}),
@@ -148,6 +154,14 @@ export default function ProductDialog({
             required
           />
         </div>
+
+        <ImageField
+          value={imageKey}
+          onChange={setImageKey}
+          label="Product image"
+          prefix="products"
+          hint="Optional. Shown on the product list and detail page."
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">

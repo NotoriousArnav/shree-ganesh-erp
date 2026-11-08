@@ -47,6 +47,10 @@ export type Product = {
   sellingPrice: number;
   stockQty: number;
   reorderLevel: number;
+  /** Catalogue definition image. */
+  imageKey: string | null;
+  /** Stock-row image; falls back to the catalogue image when empty. */
+  inventoryImageKey: string | null;
   attributes: Record<string, string> | null;
   isActive: boolean;
   createdAt: string;
@@ -74,6 +78,7 @@ export type Merchant = {
   phone: string | null;
   currency: string;
   address: Record<string, string> | null;
+  profileImageKey: string | null;
 };
 
 export type Profile = {

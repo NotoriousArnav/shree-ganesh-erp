@@ -137,6 +137,41 @@ export async function registerStorageRoutes(app: FastifyInstance) {
     },
   );
 
+  /**
+   * Streams one object back through the API so that `<img src>` and other
+   * same-origin consumers work without a fresh presigned URL on every render.
+   * Keys are tenant-scoped and responses are private to the browser cache.
+   */
+  app.get(
+    "/api/storage/objects/content",
+    { preHandler: requireMerchant() },
+    async (request, reply) => {
+      if (!requireStorage(reply)) return reply;
+
+      const query = keyQuery.safeParse(request.query);
+      if (!query.success) {
+        return reply.code(400).send({ error: query.error.issues[0]?.message });
+      }
+
+      const key = scopedKey(request.merchantAccess!.merchantId, query.data.key);
+      if (!key) return invalidKey(reply);
+
+      // A key can outlive its object when storage is pruned out of band, so a
+      // missing file is a plain 404 rather than an error page in the console.
+      if (!(await getStorage().head(key))) {
+        return reply.code(404).send({ error: "Image not found." });
+      }
+
+      const object = await getStorage().get(key);
+
+      return reply
+        .header("content-type", object.contentType ?? "application/octet-stream")
+        .header("content-length", object.size)
+        .header("cache-control", "private, max-age=31536000, immutable")
+        .send(object.body);
+    },
+  );
+
   app.put(
     "/api/storage/objects",
     { preHandler: requirePermission("catalogue") },

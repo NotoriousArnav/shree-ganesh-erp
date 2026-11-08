@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/api";
 import { dateTime, money, movementLabels, qty } from "@/lib/format";
+import { imageSrc } from "@/lib/images";
 import { usePermissions } from "@/lib/permissions";
 import type { Category, Movement, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,7 @@ export default function ProductDetail() {
   }
 
   const low = product.reorderLevel > 0 && product.stockQty <= product.reorderLevel;
+  const image = imageSrc(product.inventoryImageKey ?? product.imageKey);
 
   async function archiveProduct() {
     if (!archiveFor) return;
@@ -102,40 +104,56 @@ export default function ProductDetail() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={product.name}
-        description={
-          product.sku
-            ? `SKU ${product.sku} · ${product.barcode ?? "No barcode"} · ${
-                product.categoryName ?? "Uncategorised"
-              }`
-            : `No SKU · ${product.barcode ?? "No barcode"} · ${
-                product.categoryName ?? "Uncategorised"
-              }`
-        }
-        actions={
-          <>
-            {canStock && product.isActive ? (
-              <Button onClick={() => setStockFor(product)}>Stock</Button>
-            ) : null}
+      <div className="flex items-start gap-4">
+        {image ? (
+          <img
+            src={image}
+            alt={product.name}
+            className="size-20 shrink-0 rounded-lg border object-cover sm:size-24"
+          />
+        ) : (
+          <div className="flex size-20 shrink-0 items-center justify-center rounded-lg border bg-muted text-xl font-semibold text-muted-foreground sm:size-24">
+            {product.name.charAt(0).toUpperCase()}
+          </div>
+        )}
 
-            {canEdit && product.isActive ? (
+        <div className="min-w-0 flex-1">
+          <PageHeader
+            title={product.name}
+            description={
+              product.sku
+                ? `SKU ${product.sku} · ${product.barcode ?? "No barcode"} · ${
+                    product.categoryName ?? "Uncategorised"
+                  }`
+                : `No SKU · ${product.barcode ?? "No barcode"} · ${
+                    product.categoryName ?? "Uncategorised"
+                  }`
+            }
+            actions={
               <>
-                <Button variant="outline" onClick={() => setEditing(product)}>
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-muted-foreground"
-                  onClick={() => setArchiveFor(product)}
-                >
-                  Archive
-                </Button>
+                {canStock && product.isActive ? (
+                  <Button onClick={() => setStockFor(product)}>Stock</Button>
+                ) : null}
+
+                {canEdit && product.isActive ? (
+                  <>
+                    <Button variant="outline" onClick={() => setEditing(product)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-muted-foreground"
+                      onClick={() => setArchiveFor(product)}
+                    >
+                      Archive
+                    </Button>
+                  </>
+                ) : null}
               </>
-            ) : null}
-          </>
-        }
-      />
+            }
+          />
+        </div>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-background p-4">

@@ -14,6 +14,7 @@ type MerchantRow = {
   slug: string;
   gstin: string | null;
   phone: string | null;
+  currency: string;
 };
 
 type UserRow = {
@@ -74,6 +75,18 @@ export default function Admin() {
     ownerEmail: "",
     ownerPassword: "",
     ownerPhone: "",
+  });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editMerchant, setEditMerchant] = useState<MerchantRow | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    slug: "",
+    gstin: "",
+    phone: "",
+    currency: "INR",
   });
 
   useEffect(() => {
@@ -167,6 +180,41 @@ export default function Admin() {
     }
   }
 
+  async function saveEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEditError(null);
+
+    if (!editMerchant) return;
+    if (!editForm.name.trim()) {
+      setEditError("Give the shop a name.");
+      return;
+    }
+
+    setEditBusy(true);
+
+    try {
+      await fetchJson(`/api/admin/merchants/${editMerchant.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          slug: editForm.slug.trim() || undefined,
+          gstin: editForm.gstin.trim() || null,
+          phone: editForm.phone.trim() || null,
+          currency: editForm.currency.trim() || "INR",
+        }),
+      });
+
+      setEditOpen(false);
+      setEditMerchant(null);
+      await refreshLists();
+    } catch (cause: unknown) {
+      setEditError(cause instanceof Error ? cause.message : "Could not update merchant");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
   const merchantName = (id: string | null) =>
     id ? (merchants.find((merchant) => merchant.id === id)?.name ?? "—") : "—";
 
@@ -232,6 +280,7 @@ export default function Admin() {
                     <th className="px-4 py-2.5 font-medium">Slug</th>
                     <th className="px-4 py-2.5 font-medium">GSTIN</th>
                     <th className="px-4 py-2.5 font-medium">Phone</th>
+                    <th className="px-4 py-2.5 font-medium">Currency</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -247,12 +296,35 @@ export default function Admin() {
                       <td className="px-4 py-2.5 text-muted-foreground">
                         {merchant.phone ?? "—"}
                       </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">
+                        {merchant.currency}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditMerchant(merchant);
+                            setEditForm({
+                              name: merchant.name,
+                              slug: merchant.slug,
+                              gstin: merchant.gstin ?? "",
+                              phone: merchant.phone ?? "",
+                              currency: merchant.currency,
+                            });
+                            setEditOpen(true);
+                            setEditError(null);
+                          }}
+                      >
+                        Edit
+                      </Button>
+                    </td>
                     </tr>
                   ))}
                   {merchants.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={5}
                         className="px-4 py-6 text-center text-muted-foreground"
                       >
                         No merchants yet.
@@ -330,6 +402,71 @@ export default function Admin() {
             </Button>
             <Button type="submit" disabled={addBusy}>
               {addBusy ? "Creating…" : "Create merchant"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Edit merchant">
+        <form className="space-y-4" onSubmit={saveEdit}>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-merchant-name">Shop name</Label>
+            <Input
+              id="edit-merchant-name"
+              value={editForm.name}
+              onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-merchant-slug">Slug</Label>
+              <Input
+                id="edit-merchant-slug"
+                value={editForm.slug}
+                onChange={(event) => setEditForm({ ...editForm, slug: event.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-merchant-gstin">GSTIN</Label>
+              <Input
+                id="edit-merchant-gstin"
+                value={editForm.gstin}
+                onChange={(event) => setEditForm({ ...editForm, gstin: event.target.value })}
+                placeholder="27AABCU9603R1ZMXX"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-merchant-phone">Phone</Label>
+              <Input
+                id="edit-merchant-phone"
+                value={editForm.phone}
+                onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-merchant-currency">Currency</Label>
+              <Input
+                id="edit-merchant-currency"
+                value={editForm.currency}
+                onChange={(event) => setEditForm({ ...editForm, currency: event.target.value })}
+              />
+            </div>
+          </div>
+
+          {editError ? (
+            <p className="text-sm text-destructive" role="alert">{editError}</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={editBusy}>
+              {editBusy ? "Saving…" : "Save changes"}
             </Button>
           </div>
         </form>

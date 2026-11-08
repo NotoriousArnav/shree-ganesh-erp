@@ -14,6 +14,8 @@ import ResetPassword from "./routes/ResetPassword";
 import Categories from "./routes/merchant/Categories";
 import Dashboard from "./routes/merchant/Dashboard";
 import Products from "./routes/merchant/Products";
+import ProductDetail from "./routes/merchant/ProductDetail";
+import Settings from "./routes/merchant/Settings";
 import Staff from "./routes/merchant/Staff";
 import Stock from "./routes/merchant/Stock";
 
@@ -52,9 +54,11 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: "products", element: <Products /> },
+      { path: "products/:id", element: <ProductDetail /> },
       { path: "stock", element: <Stock /> },
       { path: "categories", element: <Categories /> },
       { path: "staff", element: <Staff /> },
+      { path: "settings", element: <Settings /> },
     ],
   },
 ]);

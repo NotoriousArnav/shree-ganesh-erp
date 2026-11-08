@@ -85,6 +85,56 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     },
   );
 
+  app.patch<{ Params: { merchantId: string } }>(
+    "/api/admin/merchants/:merchantId",
+    { preHandler: platformRoles },
+    async (request, reply) => {
+      const merchantId = request.params.merchantId;
+      const input = z
+        .object({
+          name: z.string().trim().min(1, "Name is required").max(120).optional(),
+          slug: z.string().trim().toLowerCase().max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must use lowercase letters, numbers and dashes").optional(),
+          gstin: z.string().trim().max(20).nullish(),
+          phone: z.string().trim().max(24).nullish(),
+          currency: z.string().trim().max(8).optional(),
+          address: z.record(z.string(), z.string()).nullish(),
+        })
+        .partial()
+        .superRefine((value, ctx) => {
+          if (Object.keys(value).length === 0) ctx.addIssue({ code: "custom", message: "No changes supplied" });
+        });
+
+      const parsed = input.safeParse(request.body);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
+        return reply.code(400).send({ error: `${path}${issue?.message ?? "Invalid request"}` });
+      }
+
+      const patch: Record<string, unknown> = {};
+      if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+      if (parsed.data.slug !== undefined) patch.slug = parsed.data.slug;
+      if (parsed.data.gstin !== undefined) patch.gstin = parsed.data.gstin;
+      if (parsed.data.phone !== undefined) patch.phone = parsed.data.phone;
+      if (parsed.data.currency !== undefined) patch.currency = parsed.data.currency;
+      if (parsed.data.address !== undefined) patch.address = parsed.data.address;
+
+      if (Object.keys(patch).length === 0) {
+        return reply.code(400).send({ error: "No changes supplied" });
+      }
+
+      const [updated] = await db
+        .update(merchants)
+        .set(patch)
+        .where(eq(merchants.id, merchantId))
+        .returning();
+
+      if (!updated) return reply.code(404).send({ error: "Merchant not found" });
+
+      return updated;
+    },
+  );
+
   app.post<{ Params: { merchantId: string } }>(
     "/api/admin/merchants/:merchantId/users",
     { preHandler: platformRoles },

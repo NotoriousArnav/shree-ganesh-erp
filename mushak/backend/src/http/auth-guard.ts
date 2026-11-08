@@ -195,6 +195,21 @@ export function requireOwner() {
 }
 
 /**
+ * Requires the shop owner themselves, for self-service settings. Staff may
+ * move stock but cannot edit the shop profile or manage staff.
+ */
+export function requireMerchantOwner() {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const access = await resolveMerchantAccess(request, reply);
+    if (!access) return;
+
+    if (access.role !== "merchant") {
+      reply.code(403).send({ error: "Only the shop owner can change shop settings." });
+    }
+  };
+}
+
+/**
  * Fastify preHandler factory for platform roles.
  *
  * Used by the admin API; shop users go through requireMerchant instead.

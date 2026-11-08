@@ -326,6 +326,13 @@ The backend serves the live OpenAPI document at `/openapi.json` and Swagger UI a
 `/docs`; the checked-in copy under `mushak/docs/api/` is generated from source and
 committed alongside the prose documentation.
 
+## License
+
+Released under the [MIT License](LICENSE). Because this repository is a
+monorepo for the Shree Ganesh ERP suite, the root-level license applies to the
+whole suite; the frontend and backend workspace packages carry the same
+`MIT` identifier in their own manifests.
+
 ## Inventory schema (Phase 2)
 
 - `merchants` — shop profile (name, GSTIN, currency, address)

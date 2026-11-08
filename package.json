@@ -24,7 +24,8 @@
     "user:create": "npm run user:create -w mushak/backend --",
     "mail:test": "npm run mail:test -w mushak/backend --",
     "docs:openapi": "npm run docs:openapi -w mushak/backend",
-    "docs:hugo": "node scripts/build-docs.mjs"
+    "docs:all": "node scripts/build-docs.mjs all",
+    "docs:mushak": "node scripts/build-docs.mjs mushak"
   },
   "devDependencies": {
     "drizzle-orm": "^0.45.4"

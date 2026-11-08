@@ -3,10 +3,12 @@
  * Hugo docs maker for the Shree Ganesh ERP monorepo.
  *
  * Scans for every app that has a docs/ folder (mushak/docs, lokkhi/docs, …),
- * builds a Hugo Book site per app into public/<app>/docs, and writes a small
- * root index that links to each built docs site.
+ * builds a Hugo Book site per app into dist/docs/<app>/, and writes a small
+ * root index at dist/docs/index.html that links to each built docs site.
  *
- * Run with: npm run docs:hugo   (or: node scripts/build-docs.mjs)
+ * Run with: npm run docs:all            (all apps)
+ *          npm run docs:mushak          (single app, e.g. docs:lokkhi later)
+ *          node scripts/build-docs.mjs [app]
  * Override the Hugo binary with HUGO=/path/to/hugo
  */
 
@@ -16,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = path.join(ROOT, "public");
+const OUT = path.join(ROOT, "dist", "docs");
 const HUGO = process.env.HUGO || "hugo";
 const THEME_REPO = "https://github.com/alex-shpak/hugo-book";
 
@@ -125,7 +127,7 @@ function buildApp(app) {
 
   rewriteDocs(content);
 
-  const baseURL = `https://notoriousarnav.github.io/shree-ganesh-erp/${app}/docs/`;
+  const baseURL = `https://notoriousarnav.github.io/shree-ganesh-erp/docs/${app}/`;
   execFileSync(
     HUGO,
     [
@@ -134,7 +136,7 @@ function buildApp(app) {
       "--baseURL",
       baseURL,
       "--destination",
-      path.join(OUT, app, "docs"),
+      path.join(OUT, app),
       "--cleanDestinationDir",
     ],
     { stdio: "inherit" },
@@ -157,7 +159,7 @@ function writeRootIndex(apps) {
     "  <ul>",
   ];
   for (const app of apps) {
-    lines.push(`    <li><a href="/shree-ganesh-erp/${app}/docs/">${app} docs</a></li>`);
+    lines.push(`    <li><a href="./${app}/">${app} docs</a></li>`);
   }
   lines.push("  </ul>", "</body>", "</html>", "");
   fs.writeFileSync(path.join(OUT, "index.html"), lines.join("\n"), "utf8");
@@ -167,15 +169,18 @@ async function main() {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
 
-  const apps = findApps(ROOT);
+  const requested = process.argv[2] || null;
+  const allApps = findApps(ROOT);
+  const apps = requested === "all" ? allApps : allApps.filter((app) => app === requested);
+
   if (apps.length === 0) {
-    console.error("build-docs.mjs: no docs folders found");
+    console.error("build-docs.mjs: no docs folders found or app not found");
     process.exit(1);
   }
 
   for (const app of apps) {
     const { baseURL } = buildApp(app);
-    console.log(`build-docs.mjs: built ${app} docs -> ${path.join(OUT, app, "docs")} (baseURL ${baseURL})`);
+    console.log(`build-docs.mjs: built ${app} docs -> ${path.join(OUT, app)} (baseURL ${baseURL})`);
   }
 
   writeRootIndex(apps);

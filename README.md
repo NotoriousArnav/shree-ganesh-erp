@@ -303,6 +303,29 @@ Stock movements take a positive `quantity`; the type decides the sign:
 that would take stock below zero is rejected with a readable error, and the
 stock update plus the movement row happen in one transaction.
 
+## Documentation
+
+The full documentation lives in [`mushak/docs/`](mushak/docs/README.md) and is
+plain Markdown, so it can be published to GitHub Pages or rendered by any
+Markdown site generator without modification.
+
+- [Documentation index](mushak/docs/README.md) — start here
+- [User guide](mushak/docs/user-guide/README.md) — concepts, screens, workflows, troubleshooting
+- [Quick start](mushak/docs/user-guide/quick-start.md) — first-run walkthrough
+- [Admin guide](mushak/docs/admin-guide/README.md) — platform administration
+- [API reference](mushak/docs/api/README.md) — conventions, endpoints, and the generated OpenAPI document
+- [Operations](mushak/docs/operations/setup.md) — setup, configuration, storage, mail, backups
+
+The API reference is generated from the backend spec:
+
+```bash
+npm run docs:openapi     # writes mushak/docs/api/openapi.json
+```
+
+The backend serves the live OpenAPI document at `/openapi.json` and Swagger UI at
+`/docs`; the checked-in copy under `mushak/docs/api/` is generated from source and
+committed alongside the prose documentation.
+
 ## Inventory schema (Phase 2)
 
 - `merchants` — shop profile (name, GSTIN, currency, address)

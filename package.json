@@ -21,7 +21,8 @@
     "seed:admin": "npm run seed:admin -w mushak/backend",
     "seed:demo": "npm run seed:demo -w mushak/backend",
     "user:create": "npm run user:create -w mushak/backend --",
-    "mail:test": "npm run mail:test -w mushak/backend --"
+    "mail:test": "npm run mail:test -w mushak/backend --",
+    "docs:openapi": "npm run docs:openapi -w mushak/backend"
   },
   "devDependencies": {
     "drizzle-orm": "^0.45.4"

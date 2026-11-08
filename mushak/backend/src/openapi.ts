@@ -1,580 +1,1659 @@
 import type { OpenAPIV3 } from "openapi-types";
 
+const ref = (name: string): OpenAPIV3.ReferenceObject => ({
+  $ref: `#/components/schemas/${name}`,
+});
+
+const jsonBody = (
+  schema: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+  required = true,
+): OpenAPIV3.RequestBodyObject => ({
+  required,
+  content: { "application/json": { schema } },
+});
+
+const jsonResponse = (
+  description: string,
+  schema?: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+): OpenAPIV3.ResponseObject => ({
+  description,
+  ...(schema
+    ? { content: { "application/json": { schema } } }
+    : {}),
+});
+
+const errorResponse = (description: string) =>
+  jsonResponse(description, ref("Error"));
+
+const authErrorResponse = (description: string) =>
+  jsonResponse(description, ref("AuthError"));
+
+const idParam = (name = "id"): OpenAPIV3.ParameterObject => ({
+  name,
+  in: "path",
+  required: true,
+  schema: { type: "string", format: "uuid" },
+});
+
+const unitSchema: OpenAPIV3.SchemaObject = {
+  type: "string",
+  enum: [
+    "pcs",
+    "kg",
+    "g",
+    "litre",
+    "ml",
+    "box",
+    "packet",
+    "dozen",
+    "bundle",
+    "metre",
+    "sqft",
+  ],
+};
+
+const movementTypeSchema: OpenAPIV3.SchemaObject = {
+  type: "string",
+  enum: [
+    "purchase",
+    "sale",
+    "return_in",
+    "return_out",
+    "adjustment",
+    "damage",
+    "transfer_in",
+    "transfer_out",
+  ],
+};
+
+const permissionSchema: OpenAPIV3.SchemaObject = {
+  type: "string",
+  enum: ["stock", "catalogue", "categories"],
+};
+
+const errorResponses: Record<string, OpenAPIV3.ResponseObject> = {
+  "401": errorResponse("Not signed in, session expired, or account deactivated"),
+  "403": errorResponse("Signed in but missing the role or permission"),
+};
+
 export const openapiSpec: OpenAPIV3.Document = {
   openapi: "3.0.0",
   info: {
     title: "Mushak API",
     version: "0.1.0",
+    description: [
+      "Inventory API for Mushak, the shop application in the Shree Ganesh ERP suite.",
+      "",
+      "## Authentication",
+      "Sign in through `/api/auth/sign-in/email` or `/api/auth/sign-in/phone-number`.",
+      "The response sets the http-only `better-auth.session_token` cookie; send it on every shop call.",
+      "",
+      "## Tenancy",
+      "The merchant id always comes from the session. Shop users cannot read or write another shop's rows,",
+      "and a row belonging to another shop is reported as 404.",
+      "",
+      "## Errors",
+      "Application errors use `{ \"error\": \"message\" }`. Better Auth endpoints use its own `{ \"message\", \"code\" }` shape.",
+      "",
+      "## Product versus stock",
+      "A catalogue item is the product definition. Its inventory item holds the quantity.",
+      "Stock changes only through `POST /api/merchant/inventory/{id}/stock`, which appends a movement.",
+    ].join("\n"),
   },
+  servers: [
+    {
+      url: "http://localhost:8080",
+      description: "Local development",
+    },
+  ],
+  externalDocs: {
+    description: "Mushak documentation",
+    url: "https://github.com/example/mushak",
+  },
+  tags: [
+    { name: "Health", description: "Liveness and dependency checks" },
+    { name: "Auth", description: "Better Auth sign-in, sessions and password reset" },
+    { name: "Platform admin", description: "Shops and users; super_admin or dev only" },
+    { name: "Merchant profile", description: "The signed-in shop and its profile" },
+    { name: "Dashboard", description: "Shop totals, low stock and recent movements" },
+    { name: "Categories", description: "Shop-scoped product groups" },
+    { name: "Catalogue", description: "Product definitions, prices and archive" },
+    { name: "Inventory", description: "Stock rows, reorder levels and images" },
+    { name: "Stock", description: "Append-only stock movements" },
+    { name: "Staff", description: "Shop owner manages counter accounts" },
+    { name: "Storage", description: "Tenant-scoped object storage" },
+    { name: "Meta", description: "OpenAPI and MCP" },
+  ],
+  security: [{ sessionCookie: [] }],
   components: {
     securitySchemes: {
       sessionCookie: {
-        type: "apiKey" as const,
-        in: "cookie" as const,
+        type: "apiKey",
+        in: "cookie",
         name: "better-auth.session_token",
+        description:
+          "Session cookie set by Better Auth after signing in. Send it with credentials included.",
+      },
+    },
+    schemas: {
+      Error: {
+        type: "object",
+        required: ["error"],
+        properties: {
+          error: { type: "string", example: "Name is required" },
+        },
+      },
+      AuthError: {
+        type: "object",
+        properties: {
+          message: { type: "string", example: "Invalid email or password" },
+          code: { type: "string", example: "INVALID_EMAIL_OR_PASSWORD" },
+        },
+      },
+      Unit: unitSchema,
+      MovementType: movementTypeSchema,
+      Permission: permissionSchema,
+      Category: {
+        type: "object",
+        required: ["id", "name", "createdAt", "updatedAt"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          merchantId: { type: "string", format: "uuid" },
+          parentId: { type: "string", format: "uuid", nullable: true },
+          name: { type: "string", example: "Dairy" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      CategoryWithCount: {
+        allOf: [
+          ref("Category"),
+          {
+            type: "object",
+            properties: {
+              productCount: { type: "integer", example: 6 },
+            },
+          },
+        ],
+      },
+      Product: {
+        type: "object",
+        required: [
+          "id",
+          "catalogueItemId",
+          "merchantId",
+          "name",
+          "unit",
+          "taxRate",
+          "purchasePrice",
+          "sellingPrice",
+          "stockQty",
+          "reorderLevel",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+        ],
+        properties: {
+          id: {
+            type: "string",
+            format: "uuid",
+            description:
+              "Inventory row id on inventory endpoints; catalogue item id on catalogue endpoints.",
+          },
+          catalogueItemId: { type: "string", format: "uuid" },
+          merchantId: { type: "string", format: "uuid" },
+          categoryId: { type: "string", format: "uuid", nullable: true },
+          categoryName: { type: "string", nullable: true, example: "Grains" },
+          name: { type: "string", example: "Basmati rice 5 kg" },
+          sku: { type: "string", nullable: true, example: "BASMATI-RICE-5" },
+          barcode: { type: "string", nullable: true },
+          unit: ref("Unit"),
+          hsnCode: { type: "string", nullable: true, example: "1006" },
+          taxRate: { type: "number", minimum: 0, maximum: 100, example: 5 },
+          purchasePrice: { type: "number", minimum: 0, example: 95 },
+          sellingPrice: { type: "number", minimum: 0, example: 120 },
+          attributes: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+          imageKey: { type: "string", nullable: true },
+          inventoryItemId: { type: "string", format: "uuid", nullable: true },
+          inventoryImageKey: { type: "string", nullable: true },
+          stockQty: { type: "number", example: 25 },
+          reorderLevel: { type: "number", example: 10 },
+          isActive: { type: "boolean", example: true },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      Movement: {
+        type: "object",
+        required: [
+          "id",
+          "merchantId",
+          "inventoryItemId",
+          "type",
+          "quantity",
+          "createdAt",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          merchantId: { type: "string", format: "uuid" },
+          inventoryItemId: { type: "string", format: "uuid" },
+          type: ref("MovementType"),
+          quantity: {
+            type: "number",
+            description: "Signed change: positive in, negative out.",
+            example: -2,
+          },
+          unitCost: { type: "number", nullable: true },
+          referenceType: { type: "string", nullable: true },
+          referenceId: { type: "string", format: "uuid", nullable: true },
+          note: { type: "string", nullable: true, example: "Counter sale" },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      MovementWithProduct: {
+        type: "object",
+        required: [
+          "id",
+          "productId",
+          "productName",
+          "unit",
+          "type",
+          "quantity",
+          "createdAt",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          productId: { type: "string", format: "uuid" },
+          productName: { type: "string" },
+          unit: ref("Unit"),
+          type: ref("MovementType"),
+          quantity: { type: "number", example: -2 },
+          unitCost: { type: "number", nullable: true },
+          note: { type: "string", nullable: true },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      Merchant: {
+        type: "object",
+        required: ["id", "name", "slug", "currency", "createdAt", "updatedAt"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string", example: "Ganesh Kirana" },
+          slug: { type: "string", example: "ganesh-kirana" },
+          gstin: { type: "string", nullable: true },
+          phone: { type: "string", nullable: true },
+          currency: { type: "string", example: "INR" },
+          address: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+          profileImageKey: { type: "string", nullable: true },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      Staff: {
+        type: "object",
+        required: [
+          "id",
+          "name",
+          "email",
+          "permissions",
+          "active",
+          "createdAt",
+        ],
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          email: { type: "string", format: "email" },
+          phoneNumber: { type: "string", nullable: true },
+          permissions: {
+            type: "array",
+            items: ref("Permission"),
+          },
+          active: { type: "boolean" },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      Profile: {
+        type: "object",
+        properties: {
+          merchant: { allOf: [ref("Merchant")], nullable: true },
+          user: {
+            type: "object",
+            required: ["id", "name", "role", "permissions"],
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+              role: { type: "string", enum: ["merchant", "staff"] },
+              permissions: {
+                type: "array",
+                items: ref("Permission"),
+              },
+            },
+          },
+        },
+      },
+      Dashboard: {
+        type: "object",
+        properties: {
+          merchant: { allOf: [ref("Merchant")], nullable: true },
+          counts: {
+            type: "object",
+            properties: {
+              products: { type: "integer" },
+              activeProducts: { type: "integer" },
+              categories: { type: "integer" },
+              lowStock: { type: "integer" },
+            },
+          },
+          value: {
+            type: "object",
+            properties: {
+              cost: { type: "number" },
+              retail: { type: "number" },
+              currency: { type: "string" },
+            },
+          },
+          today: {
+            type: "object",
+            properties: {
+              movements: { type: "integer" },
+              inQty: { type: "number" },
+              outQty: { type: "number" },
+            },
+          },
+          lowStock: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                unit: ref("Unit"),
+                stockQty: { type: "number" },
+                reorderLevel: { type: "number" },
+              },
+            },
+          },
+          recentMovements: {
+            type: "array",
+            items: ref("MovementWithProduct"),
+          },
+        },
+      },
+      StorageStatus: {
+        type: "object",
+        properties: {
+          driver: { type: "string", example: "s3" },
+          bucket: { type: "string", nullable: true, example: "mushak" },
+          endpoint: {
+            type: "string",
+            nullable: true,
+            example: "http://localhost:9000",
+          },
+          configured: { type: "boolean" },
+          reachable: { type: "boolean", nullable: true },
+          prefix: { type: "string", example: "0c8a…/" },
+        },
+      },
+      PresignedUpload: {
+        type: "object",
+        required: ["key", "url", "method", "expiresIn", "headers"],
+        properties: {
+          key: { type: "string" },
+          url: { type: "string", format: "uri" },
+          method: { type: "string", enum: ["PUT"] },
+          expiresIn: { type: "integer", example: 900 },
+          headers: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+        },
+      },
+      StoredObject: {
+        type: "object",
+        required: ["key", "size"],
+        properties: {
+          key: { type: "string" },
+          size: { type: "integer" },
+          contentType: { type: "string" },
+          etag: { type: "string" },
+          lastModified: { type: "string", format: "date-time" },
+        },
+      },
+      CatalogueInput: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", maxLength: 160, example: "Basmati rice 5 kg" },
+          categoryId: { type: "string", format: "uuid", nullable: true },
+          categoryName: {
+            type: "string",
+            maxLength: 80,
+            nullable: true,
+            description:
+              "Existing category name, or a new one when the caller has the categories permission.",
+          },
+          sku: {
+            type: "string",
+            maxLength: 64,
+            nullable: true,
+            description: "Generated from the name when blank.",
+          },
+          barcode: { type: "string", maxLength: 64, nullable: true },
+          unit: ref("Unit"),
+          hsnCode: { type: "string", maxLength: 16, nullable: true },
+          taxRate: { type: "number", minimum: 0, maximum: 100, default: 0 },
+          purchasePrice: {
+            type: "number",
+            minimum: 0,
+            maximum: 10000000,
+            default: 0,
+          },
+          sellingPrice: {
+            type: "number",
+            minimum: 0,
+            maximum: 10000000,
+            default: 0,
+          },
+          attributes: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+        },
+      },
+      CatalogueCreate: {
+        allOf: [
+          ref("CatalogueInput"),
+          {
+            type: "object",
+            properties: {
+              imageKey: {
+                type: "string",
+                maxLength: 1024,
+                nullable: true,
+                description: "Must start with the caller's merchant id.",
+              },
+            },
+          },
+        ],
+      },
+      CatalogueUpdate: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 160 },
+          categoryId: { type: "string", format: "uuid", nullable: true },
+          categoryName: { type: "string", maxLength: 80, nullable: true },
+          sku: { type: "string", maxLength: 64, nullable: true },
+          barcode: { type: "string", maxLength: 64, nullable: true },
+          unit: ref("Unit"),
+          hsnCode: { type: "string", maxLength: 16, nullable: true },
+          taxRate: { type: "number", minimum: 0, maximum: 100 },
+          purchasePrice: { type: "number", minimum: 0, maximum: 10000000 },
+          sellingPrice: { type: "number", minimum: 0, maximum: 10000000 },
+          attributes: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+          imageKey: { type: "string", nullable: true },
+          isActive: { type: "boolean" },
+          reorderLevel: {
+            type: "number",
+            minimum: 0,
+            maximum: 10000000,
+            description: "Updates the linked inventory row.",
+          },
+        },
+      },
+      InventoryCreate: {
+        allOf: [
+          ref("CatalogueInput"),
+          {
+            type: "object",
+            properties: {
+              inventoryImageKey: {
+                type: "string",
+                maxLength: 1024,
+                nullable: true,
+              },
+              stockQty: {
+                type: "number",
+                minimum: 0,
+                maximum: 10000000,
+                default: 0,
+                description:
+                  "Opening stock. Requires the stock permission when greater than zero.",
+              },
+              reorderLevel: {
+                type: "number",
+                minimum: 0,
+                maximum: 10000000,
+                default: 0,
+              },
+            },
+          },
+        ],
+      },
+      InventoryUpdate: {
+        allOf: [
+          ref("CatalogueUpdate"),
+          {
+            type: "object",
+            properties: {
+              inventoryImageKey: { type: "string", nullable: true },
+            },
+          },
+        ],
+      },
+      StockInput: {
+        type: "object",
+        required: ["type", "quantity"],
+        properties: {
+          type: ref("MovementType"),
+          quantity: {
+            type: "number",
+            exclusiveMinimum: true,
+            minimum: 0,
+            maximum: 10000000,
+            description: "Always positive; the type decides the sign.",
+          },
+          direction: {
+            type: "string",
+            enum: ["in", "out"],
+            description: "Required for adjustment; ignored otherwise.",
+          },
+          unitCost: { type: "number", minimum: 0, maximum: 10000000, nullable: true },
+          note: { type: "string", maxLength: 280, nullable: true },
+        },
+      },
+      MerchantInput: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          slug: {
+            type: "string",
+            maxLength: 60,
+            pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            description: "Generated from the name when omitted.",
+          },
+          gstin: { type: "string", maxLength: 20, nullable: true },
+          phone: { type: "string", maxLength: 24, nullable: true },
+          currency: { type: "string", maxLength: 8, default: "INR" },
+          address: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+        },
+      },
+      MerchantUpdate: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          slug: {
+            type: "string",
+            maxLength: 60,
+            pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          },
+          gstin: { type: "string", maxLength: 20, nullable: true },
+          phone: { type: "string", maxLength: 24, nullable: true },
+          currency: { type: "string", maxLength: 8 },
+          address: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+        },
+      },
+      OwnerInput: {
+        type: "object",
+        required: ["name", "email", "password"],
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          email: { type: "string", format: "email", maxLength: 160 },
+          password: { type: "string", minLength: 8, maxLength: 128 },
+          phoneNumber: { type: "string", maxLength: 24, nullable: true },
+          permissions: {
+            type: "array",
+            items: ref("Permission"),
+            description: "Defaults to every permission.",
+          },
+        },
+      },
+      StaffCreate: {
+        type: "object",
+        required: ["name", "email", "password"],
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          email: { type: "string", format: "email", maxLength: 160 },
+          password: { type: "string", minLength: 8, maxLength: 128 },
+          phoneNumber: {
+            type: "string",
+            maxLength: 24,
+            nullable: true,
+            description: "Ten digits are normalised to +91…",
+          },
+          permissions: {
+            type: "array",
+            items: ref("Permission"),
+            default: ["stock"],
+          },
+        },
+      },
+      StaffUpdate: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          phoneNumber: { type: "string", maxLength: 24, nullable: true },
+          permissions: {
+            type: "array",
+            items: ref("Permission"),
+            description: "Replaces the whole list; [] means view-only.",
+          },
+          active: {
+            type: "boolean",
+            description:
+              "false deactivates the account and deletes all its sessions.",
+          },
+        },
+      },
+      PasswordInput: {
+        type: "object",
+        required: ["password"],
+        properties: {
+          password: { type: "string", minLength: 8, maxLength: 128 },
+        },
+      },
+      ProfileUpdate: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          phone: { type: "string", maxLength: 24, nullable: true },
+          gstin: { type: "string", maxLength: 20, nullable: true },
+          currency: { type: "string", maxLength: 8 },
+          address: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            nullable: true,
+          },
+          profileImageKey: { type: "string", maxLength: 1024, nullable: true },
+        },
       },
     },
   },
   paths: {
     "/health": {
       get: {
-        summary: "Health check",
+        tags: ["Health"],
+        operationId: "health",
+        summary: "Liveness check",
+        security: [],
         responses: {
-          "200": {
-            description: "OK",
-          },
+          "200": jsonResponse("Service is up", {
+            type: "object",
+            properties: { status: { type: "string", example: "ok" } },
+          }),
         },
       },
     },
     "/health/db": {
       get: {
-        summary: "Database health check",
+        tags: ["Health"],
+        operationId: "healthDb",
+        summary: "Database check",
+        security: [],
         responses: {
-          "200": {
-            description: "Database is reachable",
-          },
-          "503": {
-            description: "Database is unreachable",
-          },
+          "200": jsonResponse("Database is reachable", {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "ok" },
+              database: { type: "string", example: "connected" },
+            },
+          }),
+          "503": jsonResponse("Database is unreachable", {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "error" },
+              database: { type: "string", example: "unreachable" },
+            },
+          }),
         },
       },
     },
     "/health/storage": {
       get: {
-        summary: "Object storage health check",
+        tags: ["Health"],
+        operationId: "healthStorage",
+        summary: "Object storage check",
+        security: [],
         responses: {
-          "200": {
-            description: "Storage is configured and reachable",
-          },
-          "503": {
-            description: "Storage is not configured or unreachable",
-          },
-        },
-      },
-    },
-    "/api/storage/status": {
-      get: {
-        summary: "Storage driver and tenant prefix",
-        responses: {
-          "200": {
-            description: "Driver, bucket and whether the bucket is reachable",
-          },
-          "401": {
-            description: "Not signed in",
-          },
-        },
-      },
-    },
-    "/api/storage/presign-upload": {
-      post: {
-        summary: "Create a presigned upload URL",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["filename"],
-                properties: {
-                  filename: { type: "string" },
-                  contentType: { type: "string" },
-                  prefix: { type: "string" },
-                  expiresIn: { type: "integer", minimum: 60 },
-                },
-              },
+          "200": jsonResponse("Storage is configured and reachable", {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "ok" },
+              storage: { type: "string", example: "connected" },
             },
-          },
-        },
-        responses: {
-          "200": {
-            description: "Signed PUT URL and tenant-scoped object key",
-          },
-          "403": {
-            description: "Missing catalogue permission",
-          },
-          "503": {
-            description: "Storage is not configured",
-          },
-        },
-      },
-    },
-    "/api/storage/presign-download": {
-      get: {
-        summary: "Create a presigned download URL",
-        parameters: [
-          { name: "key", in: "query", required: true, schema: { type: "string" } },
-          {
-            name: "expiresIn",
-            in: "query",
-            schema: { type: "integer", minimum: 60 },
-          },
-          {
-            name: "downloadName",
-            in: "query",
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          "200": {
-            description: "Signed GET URL",
-          },
-          "400": {
-            description: "Key is outside the merchant's prefix",
-          },
-        },
-      },
-    },
-    "/api/storage/objects": {
-      get: {
-        summary: "List objects under the merchant's prefix",
-        parameters: [
-          { name: "prefix", in: "query", schema: { type: "string" } },
-          {
-            name: "limit",
-            in: "query",
-            schema: { type: "integer", minimum: 1, maximum: 1000 },
-          },
-        ],
-        responses: {
-          "200": {
-            description: "Object keys, sizes and timestamps",
-          },
-        },
-      },
-      put: {
-        summary: "Upload an object directly (application/octet-stream)",
-        parameters: [
-          { name: "key", in: "query", required: true, schema: { type: "string" } },
-        ],
-        responses: {
-          "201": {
-            description: "Stored object metadata",
-          },
-          "415": {
-            description: "Body was not application/octet-stream",
-          },
-        },
-      },
-      delete: {
-        summary: "Delete an object",
-        parameters: [
-          { name: "key", in: "query", required: true, schema: { type: "string" } },
-        ],
-        responses: {
-          "204": {
-            description: "Deleted",
-          },
+          }),
+          "503": jsonResponse("Storage is not configured or unreachable", {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "error" },
+              storage: { type: "string", example: "unreachable" },
+            },
+          }),
         },
       },
     },
     "/openapi.json": {
       get: {
-        summary: "OpenAPI document",
+        tags: ["Meta"],
+        operationId: "openapiDocument",
+        summary: "This OpenAPI document",
+        security: [],
         responses: {
-          "200": {
-            description: "OpenAPI specification",
-          },
+          "200": { description: "OpenAPI 3.0 specification" },
         },
       },
     },
     "/api/auth/sign-in/email": {
       post: {
+        tags: ["Auth"],
+        operationId: "signInEmail",
         summary: "Sign in with email and password",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["email", "password"],
-                properties: {
-                  email: { type: "string", format: "email" },
-                  password: { type: "string" },
-                },
-              },
-            },
+        security: [],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["email", "password"],
+          properties: {
+            email: { type: "string", format: "email" },
+            password: { type: "string" },
           },
-        },
+        }),
         responses: {
-          "200": { description: "Session created" },
-          "401": { description: "Invalid credentials" },
+          "200": jsonResponse("Session created; cookie set"),
+          "400": authErrorResponse("Malformed request"),
+          "401": authErrorResponse("Invalid credentials"),
+          "429": authErrorResponse("Rate limited"),
         },
       },
     },
     "/api/auth/sign-in/phone-number": {
       post: {
+        tags: ["Auth"],
+        operationId: "signInPhone",
         summary: "Sign in with phone number and password",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["phoneNumber", "password"],
-                properties: {
-                  phoneNumber: { type: "string", example: "+919876543210" },
-                  password: { type: "string" },
-                },
-              },
-            },
+        security: [],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["phoneNumber", "password"],
+          properties: {
+            phoneNumber: { type: "string", example: "+919876543210" },
+            password: { type: "string" },
           },
-        },
+        }),
         responses: {
-          "200": { description: "Session created" },
-          "401": { description: "Invalid credentials" },
+          "200": jsonResponse("Session created; cookie set"),
+          "400": authErrorResponse("Malformed request"),
+          "401": authErrorResponse("Invalid credentials"),
         },
       },
     },
     "/api/auth/get-session": {
       get: {
-        summary: "Current session",
-        security: [{ sessionCookie: [] }],
+        tags: ["Auth"],
+        operationId: "getSession",
+        summary: "Current session and user",
         responses: {
-          "200": { description: "Session and user, or null" },
+          "200": jsonResponse("Session and user, or null"),
         },
       },
     },
     "/api/auth/sign-out": {
       post: {
+        tags: ["Auth"],
+        operationId: "signOut",
         summary: "Sign out",
-        security: [{ sessionCookie: [] }],
         responses: {
-          "200": { description: "Session cleared" },
+          "200": jsonResponse("Session cleared"),
+        },
+      },
+    },
+    "/api/auth/request-password-reset": {
+      post: {
+        tags: ["Auth"],
+        operationId: "requestPasswordReset",
+        summary: "Send a password-reset link",
+        security: [],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["email"],
+          properties: {
+            email: { type: "string", format: "email" },
+            redirectTo: {
+              type: "string",
+              format: "uri",
+              description: "Where the emailed link should return.",
+            },
+          },
+        }),
+        responses: {
+          "200": jsonResponse("Request accepted"),
+          "400": authErrorResponse("Malformed request"),
+        },
+      },
+    },
+    "/api/auth/reset-password": {
+      post: {
+        tags: ["Auth"],
+        operationId: "resetPassword",
+        summary: "Set a new password with a reset token",
+        security: [],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["newPassword", "token"],
+          properties: {
+            newPassword: { type: "string", minLength: 8, maxLength: 128 },
+            token: { type: "string" },
+          },
+        }),
+        responses: {
+          "200": jsonResponse("Password changed"),
+          "400": authErrorResponse("Weak password or invalid token"),
         },
       },
     },
     "/api/admin/merchants": {
       get: {
-        summary: "List merchants",
+        tags: ["Platform admin"],
+        operationId: "listMerchants",
+        summary: "List shops",
         description: "Requires the super_admin or dev role.",
-        security: [{ sessionCookie: [] }],
         responses: {
-          "200": { description: "Merchants" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a platform role" },
+          "200": jsonResponse("All shops", {
+            type: "array",
+            items: ref("Merchant"),
+          }),
+          ...errorResponses,
         },
       },
       post: {
-        summary: "Create a merchant",
+        tags: ["Platform admin"],
+        operationId: "createMerchant",
+        summary: "Create a shop",
         description:
-          "Requires the super_admin or dev role. Creates a shop; a starter owner can then be added via /api/admin/merchants/{id}/users.",
-        security: [{ sessionCookie: [] }],
+          "Requires the super_admin or dev role. This does not create a user; add the owner with POST /api/admin/merchants/{merchantId}/users.",
+        requestBody: jsonBody(ref("MerchantInput")),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a platform role" },
-          "409": { description: "Slug already in use" },
+          "201": jsonResponse("Created", ref("Merchant")),
+          "400": errorResponse("Invalid body"),
+          ...errorResponses,
+          "409": errorResponse("Slug already in use"),
         },
       },
     },
-    "/api/admin/users": {
-      get: {
-        summary: "List users",
-        description: "Requires the super_admin or dev role.",
-        security: [{ sessionCookie: [] }],
+    "/api/admin/merchants/{merchantId}": {
+      patch: {
+        tags: ["Platform admin"],
+        operationId: "updateMerchant",
+        summary: "Update a shop",
+        requestBody: jsonBody(ref("MerchantUpdate")),
+        parameters: [idParam("merchantId")],
         responses: {
-          "200": { description: "Users" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a platform role" },
+          "200": jsonResponse("Updated", ref("Merchant")),
+          "400": errorResponse("Invalid body or no changes supplied"),
+          ...errorResponses,
+          "404": errorResponse("Merchant not found"),
+          "409": errorResponse("Slug already in use"),
         },
       },
     },
     "/api/admin/merchants/{merchantId}/users": {
       post: {
-        summary: "Create a merchant-scoped user",
+        tags: ["Platform admin"],
+        operationId: "createMerchantOwner",
+        summary: "Create a shop owner",
         description:
-          "Requires the super_admin or dev role. Creates a merchant account with a credential login and the full permission set by default (owner).",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "merchantId", in: "path", required: true, schema: { type: "string" } }],
+          "Creates a user with the merchant role in the given shop. Requires the super_admin or dev role.",
+        parameters: [idParam("merchantId")],
+        requestBody: jsonBody(ref("OwnerInput")),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a platform role" },
-          "404": { description: "Merchant not found" },
-          "409": { description: "Email or phone already in use" },
+          "201": jsonResponse("Owner created", ref("Staff")),
+          "400": errorResponse("Invalid body"),
+          ...errorResponses,
+          "404": errorResponse("Merchant not found"),
+          "409": errorResponse("Email or phone already in use"),
+        },
+      },
+    },
+    "/api/admin/users": {
+      get: {
+        tags: ["Platform admin"],
+        operationId: "listUsers",
+        summary: "List all accounts",
+        responses: {
+          "200": jsonResponse("Users", {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                email: { type: "string", format: "email" },
+                phoneNumber: { type: "string", nullable: true },
+                role: {
+                  type: "string",
+                  enum: ["super_admin", "dev", "merchant", "staff"],
+                },
+                merchantId: { type: "string", format: "uuid", nullable: true },
+                banned: { type: "boolean", nullable: true },
+                createdAt: { type: "string", format: "date-time" },
+              },
+            },
+          }),
+          ...errorResponses,
         },
       },
     },
     "/api/merchant/profile": {
       get: {
-        summary: "Signed-in merchant and user",
-        description:
-          "Requires merchant or staff. The merchant comes from the session. user.permissions lists the effective staff permissions; merchants always have all of them.",
-        security: [{ sessionCookie: [] }],
+        tags: ["Merchant profile"],
+        operationId: "getProfile",
+        summary: "Get the shop and effective permissions",
         responses: {
-          "200": { description: "Merchant and user" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a merchant-scoped role" },
+          "200": jsonResponse("Profile", ref("Profile")),
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Merchant profile"],
+        operationId: "updateProfile",
+        summary: "Update the shop profile",
+        description: "Requires the merchant role (shop owner).",
+        requestBody: jsonBody(ref("ProfileUpdate")),
+        responses: {
+          "200": jsonResponse("Updated profile", ref("Profile")),
+          "400": errorResponse("Invalid body, bad image key, or no changes"),
+          ...errorResponses,
+          "404": errorResponse("Merchant not found"),
         },
       },
     },
     "/api/merchant/dashboard": {
       get: {
-        summary: "Shop dashboard summary",
-        description:
-          "Counts, stock value, today's movements, low-stock products and recent stock movements.",
-        security: [{ sessionCookie: [] }],
+        tags: ["Dashboard"],
+        operationId: "getDashboard",
+        summary: "Shop totals, low stock and recent movements",
         responses: {
-          "200": { description: "Dashboard" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not a merchant-scoped role" },
+          "200": jsonResponse("Dashboard", ref("Dashboard")),
+          ...errorResponses,
         },
       },
     },
     "/api/merchant/categories": {
       get: {
-        summary: "List categories",
-        security: [{ sessionCookie: [] }],
-        responses: { "200": { description: "Categories with product counts" } },
+        tags: ["Categories"],
+        operationId: "listCategories",
+        summary: "List categories with product counts",
+        responses: {
+          "200": jsonResponse("Categories", {
+            type: "array",
+            items: ref("CategoryWithCount"),
+          }),
+          ...errorResponses,
+        },
       },
       post: {
+        tags: ["Categories"],
+        operationId: "createCategory",
         summary: "Create a category",
         description:
           "Requires the merchant role or a staff account with the categories permission.",
-        security: [{ sessionCookie: [] }],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", maxLength: 80, example: "Dairy" },
+            parentId: { type: "string", format: "uuid", nullable: true },
+          },
+        }),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body or parent category" },
-          "409": { description: "Duplicate name" },
+          "201": jsonResponse("Created", ref("Category")),
+          "400": errorResponse("Invalid name or parent not found"),
+          ...errorResponses,
+          "409": errorResponse("Duplicate name"),
         },
       },
     },
     "/api/merchant/categories/{id}": {
       patch: {
-        summary: "Rename a category",
-        description:
-          "Requires the merchant role or a staff account with the categories permission.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        tags: ["Categories"],
+        operationId: "updateCategory",
+        summary: "Rename or re-parent a category",
+        parameters: [idParam()],
+        requestBody: jsonBody({
+          type: "object",
+          properties: {
+            name: { type: "string", maxLength: 80 },
+            parentId: { type: "string", format: "uuid", nullable: true },
+          },
+        }),
         responses: {
-          "200": { description: "Updated" },
-          "404": { description: "Not found" },
-          "409": { description: "Duplicate name" },
+          "200": jsonResponse("Updated", ref("Category")),
+          "400": errorResponse("Invalid body or parent not found"),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
+          "409": errorResponse("Duplicate name"),
         },
       },
       delete: {
+        tags: ["Categories"],
+        operationId: "deleteCategory",
         summary: "Delete a category",
         description:
-          "Requires the merchant role or the categories permission. Products keep existing and become uncategorised.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Products keep existing and become uncategorised. Child categories keep existing with no parent.",
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Deleted" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Deleted", {
+            type: "object",
+            properties: { id: { type: "string", format: "uuid" } },
+          }),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
     },
     "/api/merchant/catalogue": {
       get: {
+        tags: ["Catalogue"],
+        operationId: "listCatalogue",
         summary: "List catalogue items",
         description:
-          "Product definitions with their stock row joined in. Query: q (name/SKU/barcode), categoryId, includeInactive=true.",
-        security: [{ sessionCookie: [] }],
-        responses: { "200": { description: "Catalogue items with stock and category names" } },
+          "Product definitions joined with their stock row and category name.",
+        parameters: [
+          {
+            name: "q",
+            in: "query",
+            schema: { type: "string" },
+            description: "Match on name, SKU or barcode.",
+          },
+          {
+            name: "categoryId",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "includeInactive",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Catalogue items", {
+            type: "array",
+            items: ref("Product"),
+          }),
+          ...errorResponses,
+        },
       },
       post: {
-        summary: "Create a catalogue item",
+        tags: ["Catalogue"],
+        operationId: "createCatalogueItem",
+        summary: "Create a product definition",
         description:
-          "Requires the merchant role or the catalogue permission. Adds a product definition and an empty inventory row, so the item can exist before it is stocked. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
-        security: [{ sessionCookie: [] }],
+          "Requires the merchant role or the catalogue permission. Creates a catalogue item and an empty inventory row. A non-empty categoryName is reused, or created when the caller also has the categories permission. A blank SKU is generated from the name.",
+        requestBody: jsonBody(ref("CatalogueCreate")),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body or category" },
-          "409": { description: "Duplicate SKU or barcode" },
+          "201": jsonResponse("Created", ref("Product")),
+          "400": errorResponse("Invalid body, image key or category"),
+          ...errorResponses,
+          "409": errorResponse("Duplicate SKU or barcode"),
         },
       },
     },
     "/api/merchant/catalogue/{id}": {
       get: {
-        summary: "Get one catalogue item",
-        description:
-          "Returns the definition joined with its stock row. The id is the catalogue item id.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        tags: ["Catalogue"],
+        operationId: "getCatalogueItem",
+        summary: "Get one product definition",
+        description: "The id is the catalogue item id.",
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Catalogue item with stock and category name" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Catalogue item", ref("Product")),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
       patch: {
-        summary: "Update a catalogue item",
+        tags: ["Catalogue"],
+        operationId: "updateCatalogueItem",
+        summary: "Update a product definition",
         description:
-          "Requires the merchant role or the catalogue permission. Updates the definition; sending reorderLevel also updates the linked inventory row. Stock quantity is never edited here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Stock quantity is never changed here; use POST /api/merchant/inventory/{id}/stock. Sending reorderLevel updates the linked inventory row. isActive=false archives, isActive=true restores.",
+        parameters: [idParam()],
+        requestBody: jsonBody(ref("CatalogueUpdate")),
         responses: {
-          "200": { description: "Updated" },
-          "400": { description: "Invalid body" },
-          "404": { description: "Not found" },
-          "409": { description: "Duplicate SKU or barcode" },
+          "200": jsonResponse("Updated", ref("Product")),
+          "400": errorResponse("Invalid body, image key or no changes"),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
+          "409": errorResponse("Duplicate SKU or barcode"),
         },
       },
       delete: {
-        summary: "Archive a catalogue item",
+        tags: ["Catalogue"],
+        operationId: "archiveCatalogueItem",
+        summary: "Archive a product",
         description:
-          "Soft delete: sets isActive=false and keeps the inventory row and stock history. Requires the merchant role or the catalogue permission.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Soft delete: sets isActive=false and keeps the inventory row and history.",
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Archived" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Archived", {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              isActive: { type: "boolean", example: false },
+            },
+          }),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
     },
     "/api/merchant/inventory": {
       get: {
+        tags: ["Inventory"],
+        operationId: "listInventory",
         summary: "List inventory rows",
         description:
-          "On-hand stock joined with catalogue definitions and category names. The returned id is the inventory row id; catalogueItemId identifies the definition. Query: q (name/SKU/barcode), categoryId, lowStock=true, includeInactive=true.",
-        security: [{ sessionCookie: [] }],
-        responses: { "200": { description: "Inventory rows with product and category names" } },
+          "On-hand stock joined with definitions and category names. The returned id is the inventory row id.",
+        parameters: [
+          { name: "q", in: "query", schema: { type: "string" } },
+          {
+            name: "categoryId",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "lowStock",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+          },
+          {
+            name: "includeInactive",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Inventory rows", {
+            type: "array",
+            items: ref("Product"),
+          }),
+          ...errorResponses,
+        },
       },
       post: {
-        summary: "Add a stocked product",
+        tags: ["Inventory"],
+        operationId: "createInventoryItem",
+        summary: "Create a product with stock",
         description:
-          "Requires the merchant role or the catalogue permission. Creates a catalogue definition and an inventory row. Opening stock is recorded as an adjustment movement and additionally needs the stock permission. Send categoryName to reuse or create a category inline; creating a new one needs the categories permission. When sku is empty a readable one is generated from the name; barcode is optional.",
-        security: [{ sessionCookie: [] }],
+          "Requires the catalogue permission. A stockQty above zero also needs the stock permission and is recorded as an adjustment.",
+        requestBody: jsonBody(ref("InventoryCreate")),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body or category" },
-          "409": { description: "Duplicate SKU or barcode" },
+          "201": jsonResponse("Created", ref("Product")),
+          "400": errorResponse("Invalid body, image key or category"),
+          ...errorResponses,
+          "409": errorResponse("Duplicate SKU or barcode"),
         },
       },
     },
     "/api/merchant/inventory/{id}": {
       get: {
+        tags: ["Inventory"],
+        operationId: "getInventoryItem",
         summary: "Get one inventory row",
-        description:
-          "Returns the stock row joined with its definition and category name. The id is the inventory row id. Stock is not editable here; use the stock endpoint.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Inventory row with product and category name" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Inventory row", ref("Product")),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
       patch: {
-        summary: "Update a stocked product",
+        tags: ["Inventory"],
+        operationId: "updateInventoryItem",
+        summary: "Update product details or stock-row settings",
         description:
-          "Requires the merchant role or the catalogue permission. Updates the definition behind the inventory row and, when sent, its reorderLevel. Stock quantity is not editable here; use the stock endpoint. categoryName reuses an existing category, and only creates one with the categories permission; an empty value clears it.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Updates the definition fields, reorderLevel and inventoryImageKey. stockQty is not accepted; use the stock endpoint.",
+        parameters: [idParam()],
+        requestBody: jsonBody(ref("InventoryUpdate")),
         responses: {
-          "200": { description: "Updated" },
-          "400": { description: "Invalid body" },
-          "404": { description: "Not found" },
-          "409": { description: "Duplicate SKU or barcode" },
+          "200": jsonResponse("Updated", ref("Product")),
+          "400": errorResponse("Invalid body, image key or no changes"),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
+          "409": errorResponse("Duplicate SKU or barcode"),
         },
       },
       delete: {
+        tags: ["Inventory"],
+        operationId: "archiveInventoryItem",
         summary: "Archive the product behind an inventory row",
-        description:
-          "Soft delete: sets the catalogue item isActive=false and keeps the stock row and history. Requires the merchant role or the catalogue permission.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Archived" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Archived", {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              isActive: { type: "boolean", example: false },
+            },
+          }),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
     },
     "/api/merchant/inventory/{id}/stock": {
       post: {
-        summary: "Move stock",
+        tags: ["Stock"],
+        operationId: "moveStock",
+        summary: "Record a stock movement",
         description:
-          "Requires the merchant role or a staff account with the stock permission. Types: purchase, sale, return_in, return_out, damage, adjustment, transfer_in, transfer_out. Quantity is positive; the type decides the sign. Adjustment requires direction=in|out.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Requires the stock permission. Sends a positive quantity; the type decides the sign. The resulting quantity cannot be below zero, and archived products cannot move.",
+        parameters: [idParam()],
+        requestBody: jsonBody(ref("StockInput")),
         responses: {
-          "200": { description: "Updated product and movement" },
-          "400": { description: "Invalid body or insufficient stock" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Updated stock and the new movement", {
+            type: "object",
+            properties: {
+              product: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  merchantId: { type: "string", format: "uuid" },
+                  catalogueItemId: { type: "string", format: "uuid" },
+                  stockQty: { type: "number" },
+                  reorderLevel: { type: "number" },
+                  imageKey: { type: "string", nullable: true },
+                  createdAt: { type: "string", format: "date-time" },
+                  updatedAt: { type: "string", format: "date-time" },
+                  name: { type: "string" },
+                  unit: ref("Unit"),
+                },
+              },
+              movement: ref("Movement"),
+            },
+          }),
+          "400": errorResponse(
+            "Invalid body, archived product, or insufficient stock",
+          ),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
     },
     "/api/merchant/inventory/{id}/movements": {
       get: {
-        summary: "Stock history for one product",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        tags: ["Stock"],
+        operationId: "getProductMovements",
+        summary: "Last 100 movements for one product",
+        parameters: [idParam()],
         responses: {
-          "200": { description: "Product and movements" },
-          "404": { description: "Not found" },
+          "200": jsonResponse("Product and movements", {
+            type: "object",
+            properties: {
+              product: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  name: { type: "string" },
+                  unit: ref("Unit"),
+                },
+              },
+              movements: {
+                type: "array",
+                items: ref("Movement"),
+              },
+            },
+          }),
+          ...errorResponses,
+          "404": errorResponse("Not found"),
         },
       },
     },
     "/api/merchant/movements": {
       get: {
-        summary: "Recent stock movements",
-        description: "Query: limit (1-200, default 50).",
-        security: [{ sessionCookie: [] }],
-        responses: { "200": { description: "Movements with product names" } },
+        tags: ["Stock"],
+        operationId: "listMovements",
+        summary: "Shop-wide movement history",
+        parameters: [
+          {
+            name: "limit",
+            in: "query",
+            schema: {
+              type: "integer",
+              minimum: 1,
+              maximum: 200,
+              default: 50,
+            },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Movements, newest first", {
+            type: "array",
+            items: ref("MovementWithProduct"),
+          }),
+          ...errorResponses,
+        },
       },
     },
     "/api/merchant/staff": {
       get: {
-        summary: "List staff",
-        description: "Requires the merchant role. Returns staff for the merchant on the session.",
-        security: [{ sessionCookie: [] }],
+        tags: ["Staff"],
+        operationId: "listStaff",
+        summary: "List staff accounts",
+        description: "Requires the merchant role (shop owner).",
         responses: {
-          "200": { description: "Staff accounts with permissions and active status" },
-          "401": { description: "Not signed in" },
-          "403": { description: "Not the shop owner" },
+          "200": jsonResponse("Staff accounts", {
+            type: "array",
+            items: ref("Staff"),
+          }),
+          ...errorResponses,
         },
       },
       post: {
+        tags: ["Staff"],
+        operationId: "createStaff",
         summary: "Create a staff account",
         description:
-          "Requires the merchant role. Password must be 8-128 characters. Permissions are stock, catalogue and categories; the default is stock only.",
-        security: [{ sessionCookie: [] }],
+          "Requires the merchant role. Permissions are stock, catalogue and categories; the default is stock only.",
+        requestBody: jsonBody(ref("StaffCreate")),
         responses: {
-          "201": { description: "Created" },
-          "400": { description: "Invalid body" },
-          "403": { description: "Not the shop owner" },
-          "409": { description: "Email or phone already in use" },
+          "201": jsonResponse("Created", ref("Staff")),
+          "400": errorResponse("Invalid body"),
+          ...errorResponses,
+          "409": errorResponse("Email or phone already in use"),
         },
       },
     },
     "/api/merchant/staff/{id}": {
       patch: {
+        tags: ["Staff"],
+        operationId: "updateStaff",
         summary: "Update staff details or access",
         description:
-          "Requires the merchant role. Send name, phoneNumber, permissions or active. active=false deactivates the account, signs out every device and blocks sign-in.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Requires the merchant role. active=false deactivates the account, deletes every session and blocks sign-in.",
+        parameters: [idParam()],
+        requestBody: jsonBody(ref("StaffUpdate")),
         responses: {
-          "200": { description: "Updated" },
-          "400": { description: "Invalid body" },
-          "403": { description: "Not the shop owner" },
-          "404": { description: "Not found for this shop" },
-          "409": { description: "Phone already in use" },
+          "200": jsonResponse("Updated", ref("Staff")),
+          "400": errorResponse("Invalid body or no changes"),
+          ...errorResponses,
+          "404": errorResponse("Staff member not found"),
+          "409": errorResponse("Email or phone already in use"),
         },
       },
     },
     "/api/merchant/staff/{id}/password": {
       post: {
-        summary: "Reset a staff password",
+        tags: ["Staff"],
+        operationId: "resetStaffPassword",
+        summary: "Set a new staff password",
         description:
-          "Requires the merchant role. The account is signed out everywhere after the change.",
-        security: [{ sessionCookie: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          "Requires the merchant role. Deletes all sessions for that staff member.",
+        parameters: [idParam()],
+        requestBody: jsonBody(ref("PasswordInput")),
         responses: {
-          "200": { description: "Password changed" },
-          "400": { description: "Invalid body" },
-          "403": { description: "Not the shop owner" },
-          "404": { description: "Not found for this shop" },
+          "200": jsonResponse("Password reset", {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              passwordReset: { type: "boolean", example: true },
+            },
+          }),
+          "400": errorResponse("Invalid password"),
+          ...errorResponses,
+          "404": errorResponse("Staff member not found"),
+        },
+      },
+    },
+    "/api/storage/status": {
+      get: {
+        tags: ["Storage"],
+        operationId: "storageStatus",
+        summary: "Storage driver and tenant prefix",
+        responses: {
+          "200": jsonResponse("Storage status", ref("StorageStatus")),
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/storage/presign-upload": {
+      post: {
+        tags: ["Storage"],
+        operationId: "presignUpload",
+        summary: "Create a presigned upload URL",
+        description:
+          "Requires the catalogue permission. Returns a PUT URL for the tenant-scoped key.",
+        requestBody: jsonBody({
+          type: "object",
+          required: ["filename"],
+          properties: {
+            filename: { type: "string", maxLength: 200 },
+            contentType: { type: "string", maxLength: 200 },
+            prefix: { type: "string", maxLength: 200, example: "products" },
+            expiresIn: {
+              type: "integer",
+              minimum: 60,
+              maximum: 604800,
+              default: 900,
+            },
+          },
+        }),
+        responses: {
+          "200": jsonResponse("Signed PUT URL", ref("PresignedUpload")),
+          "400": errorResponse("Invalid body"),
+          ...errorResponses,
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+    },
+    "/api/storage/presign-download": {
+      get: {
+        tags: ["Storage"],
+        operationId: "presignDownload",
+        summary: "Create a presigned download URL",
+        parameters: [
+          {
+            name: "key",
+            in: "query",
+            required: true,
+            schema: { type: "string", maxLength: 1024 },
+          },
+          {
+            name: "expiresIn",
+            in: "query",
+            schema: {
+              type: "integer",
+              minimum: 60,
+              maximum: 604800,
+              default: 900,
+            },
+          },
+          {
+            name: "downloadName",
+            in: "query",
+            schema: { type: "string", maxLength: 200 },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Signed GET URL", {
+            type: "object",
+            properties: {
+              key: { type: "string" },
+              url: { type: "string", format: "uri" },
+            },
+          }),
+          "400": errorResponse("Key is outside the merchant prefix"),
+          ...errorResponses,
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+    },
+    "/api/storage/objects": {
+      get: {
+        tags: ["Storage"],
+        operationId: "listObjects",
+        summary: "List objects under the merchant prefix",
+        parameters: [
+          { name: "prefix", in: "query", schema: { type: "string" } },
+          {
+            name: "limit",
+            in: "query",
+            schema: {
+              type: "integer",
+              minimum: 1,
+              maximum: 1000,
+              default: 100,
+            },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Objects", {
+            type: "object",
+            properties: {
+              prefix: { type: "string" },
+              objects: {
+                type: "array",
+                items: ref("StoredObject"),
+              },
+            },
+          }),
+          "400": errorResponse("Invalid prefix"),
+          ...errorResponses,
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+      put: {
+        tags: ["Storage"],
+        operationId: "uploadObject",
+        summary: "Upload an object directly",
+        description:
+          "Requires the catalogue permission. Body must be application/octet-stream, maximum 25 MB.",
+        parameters: [
+          {
+            name: "key",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "contentType",
+            in: "query",
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
+        responses: {
+          "201": jsonResponse("Stored object metadata", ref("StoredObject")),
+          "400": errorResponse("Invalid key or query"),
+          ...errorResponses,
+          "415": errorResponse("Body was not application/octet-stream"),
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+      delete: {
+        tags: ["Storage"],
+        operationId: "deleteObject",
+        summary: "Delete an object",
+        parameters: [
+          {
+            name: "key",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "204": { description: "Deleted" },
+          "400": errorResponse("Invalid key"),
+          ...errorResponses,
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+    },
+    "/api/storage/objects/content": {
+      get: {
+        tags: ["Storage"],
+        operationId: "streamObject",
+        summary: "Stream image bytes",
+        description:
+          "Same-origin image endpoint used by the UI. Requires a shop session and a key under the merchant prefix.",
+        parameters: [
+          {
+            name: "key",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Object bytes",
+            content: {
+              "application/octet-stream": {
+                schema: { type: "string", format: "binary" },
+              },
+            },
+          },
+          "400": errorResponse("Invalid key"),
+          ...errorResponses,
+          "404": errorResponse("Image not found"),
+          "503": errorResponse("Storage is not configured"),
         },
       },
     },
     "/mcp": {
       post: {
+        tags: ["Meta"],
+        operationId: "mcp",
         summary: "Model Context Protocol endpoint",
-        responses: {
-          "200": {
-            description: "MCP response",
+        description:
+          "Streamable HTTP MCP endpoint. The server exposes a single health_check tool that returns the text 'ok'.",
+        security: [],
+        requestBody: jsonBody({
+          type: "object",
+          properties: {
+            jsonrpc: { type: "string", example: "2.0" },
+            id: { type: "integer", example: 1 },
+            method: { type: "string", example: "tools/call" },
+            params: {
+              type: "object",
+              properties: {
+                name: { type: "string", example: "health_check" },
+                arguments: { type: "object" },
+              },
+            },
           },
+        }),
+        responses: {
+          "200": { description: "MCP response" },
         },
       },
     },

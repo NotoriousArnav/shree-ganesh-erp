@@ -10,5 +10,6 @@ dist/
 /site/apps/*/content/
 /site/apps/*/static/
 /site/apps/*/themes/
+/site/apps/*/hugo.toml
 
 site/**/.hugo_build.lock

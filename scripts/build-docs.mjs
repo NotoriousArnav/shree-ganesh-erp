@@ -103,6 +103,12 @@ function buildApp(app) {
   const dest = path.join(ROOT, "site", "apps", app);
   const content = path.join(dest, "content");
   const staticDir = path.join(dest, "static");
+  const basePrefix =
+    process.env.DOCS_BASE_PREFIX || "https://notoriousarnav.github.io/shree-ganesh-erp/docs/";
+  const deployBaseURL = `${basePrefix.replace(/\/?$/, "/")}${app}/`;
+  const isCI = process.env.GITHUB_ACTIONS === "true" || process.env.CI === "true";
+  const baseURL = isCI || process.env.DOCS_BASE_PREFIX ? deployBaseURL : "/";
+  const relativeURLs = baseURL === "/";
 
   fs.rmSync(content, { recursive: true, force: true });
   fs.rmSync(staticDir, { recursive: true, force: true });
@@ -116,6 +122,31 @@ function buildApp(app) {
   if (fs.existsSync(srcAssets)) {
     fs.cpSync(srcAssets, path.join(staticDir, "assets"), { recursive: true });
   }
+
+  const title = app.charAt(0).toUpperCase() + app.slice(1);
+  fs.writeFileSync(
+    path.join(dest, "hugo.toml"),
+    `baseURL = "${baseURL}"
+title = "${title}"
+theme = "hugo-book"
+defaultContentLanguage = "en"
+disableKinds = ["taxonomy", "term"]
+relativeURLs = ${relativeURLs}
+canonifyURLs = false
+
+[params]
+  bookSection = "*"
+  bookShowReadingTime = false
+  bookHideSearch = false
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+`,
+    "utf8",
+  );
+
   if (!fs.existsSync(path.join(dest, "themes", "hugo-book"))) {
     fs.mkdirSync(path.join(dest, "themes"), { recursive: true });
     execFileSync(
@@ -127,7 +158,6 @@ function buildApp(app) {
 
   rewriteDocs(content);
 
-  const baseURL = `https://notoriousarnav.github.io/shree-ganesh-erp/docs/${app}/`;
   execFileSync(
     HUGO,
     [

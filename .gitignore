@@ -6,3 +6,9 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
+/public/
+/site/apps/*/content/
+/site/apps/*/static/
+/site/apps/*/themes/
+
+site/**/.hugo_build.lock

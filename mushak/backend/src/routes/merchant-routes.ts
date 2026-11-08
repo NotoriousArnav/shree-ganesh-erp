@@ -21,7 +21,7 @@ import {
   stockMovements,
   stockMovementType,
 } from "../db/schema.js";
-import { requireMerchant, requirePermission, can } from "../http/auth-guard.js";
+import { requireMerchant, requireMerchantOwner, requirePermission, can } from "../http/auth-guard.js";
 import {
   isUniqueViolation,
   uniqueConstraint,
@@ -257,6 +257,8 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
   const owner = requirePermission("catalogue");
   const categoryEditor = requirePermission("categories");
   const stockMover = requirePermission("stock");
+  // The shop owner themselves can edit the shop profile.
+  const ownerSelf = requireMerchantOwner();
 
   app.get("/api/merchant/profile", { preHandler: scoped }, async (request) => {
     const merchantId = merchantIdOf(request);
@@ -268,6 +270,57 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
 
     return {
       merchant: merchant ?? null,
+      user: {
+        id: request.authSession!.user.id,
+        name: request.authSession!.user.name,
+        role: request.merchantAccess!.role,
+        permissions: request.merchantAccess!.permissions,
+      },
+    };
+  });
+
+  app.patch("/api/merchant/profile", { preHandler: ownerSelf }, async (request, reply) => {
+    const merchantId = merchantIdOf(request);
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(1, "Name is required").max(120).optional(),
+        phone: z.string().trim().max(24).nullish(),
+        gstin: z.string().trim().max(20).nullish(),
+        currency: z.string().trim().max(8).optional(),
+        address: z.record(z.string(), z.string()).nullish(),
+      }),
+      request.body,
+      reply,
+    );
+    if (!input) return;
+
+    const patch: Record<string, unknown> = {};
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.phone !== undefined) patch.phone = input.phone;
+    if (input.gstin !== undefined) patch.gstin = input.gstin;
+    if (input.currency !== undefined) patch.currency = input.currency;
+    if (input.address !== undefined) patch.address = input.address;
+
+    if (Object.keys(patch).length === 0) {
+      return reply.code(400).send({ error: "No changes supplied" });
+    }
+
+    const [updated] = await db
+      .update(merchants)
+      .set(patch)
+      .where(eq(merchants.id, merchantId))
+      .returning();
+
+    if (!updated) return reply.code(404).send({ error: "Merchant not found" });
+
+    const [merchant] = await db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.id, merchantId))
+      .limit(1);
+
+    return {
+      merchant: merchant ?? updated,
       user: {
         id: request.authSession!.user.id,
         name: request.authSession!.user.name,
@@ -632,6 +685,35 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
       throw error;
     }
   });
+
+  app.get<{ Params: { id: string } }>(
+    "/api/merchant/products/:id",
+    { preHandler: scoped },
+    async (request, reply) => {
+      const merchantId = merchantIdOf(request);
+
+      const [product] = await db
+        .select({
+          ...getTableColumns(products),
+          categoryName: categories.name,
+        })
+        .from(products)
+        .leftJoin(categories, eq(categories.id, products.categoryId))
+        .where(
+          and(
+            eq(products.id, request.params.id),
+            eq(products.merchantId, merchantId),
+          ),
+        )
+        .limit(1);
+
+      if (!product) {
+        return reply.code(404).send({ error: "Not found" });
+      }
+
+      return product;
+    },
+  );
 
   app.patch<{ Params: { id: string } }>(
     "/api/merchant/products/:id",

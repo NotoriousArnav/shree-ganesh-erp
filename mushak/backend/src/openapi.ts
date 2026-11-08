@@ -259,6 +259,17 @@ export const openapiSpec: OpenAPIV3.Document = {
       },
     },
     "/api/merchant/products/{id}": {
+      get: {
+        summary: "Get one product",
+        description:
+          "Requires the merchant role or the catalogue permission. Returns the product with its category name. Stock is not editable here; use the stock endpoint.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Product with category name" },
+          "404": { description: "Not found" },
+        },
+      },
       patch: {
         summary: "Update a product",
         description:

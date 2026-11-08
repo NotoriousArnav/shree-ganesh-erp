@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import PageHeader from "@/components/page-header";
 import ProductDialog from "@/components/product-dialog";
 import StockDialog from "@/components/stock-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 export default function Products() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { can } = usePermissions();
   const canEdit = can("catalogue");
   const canStock = can("stock");
@@ -33,6 +35,7 @@ export default function Products() {
 
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [stockFor, setStockFor] = useState<Product | null>(null);
+  const [archiveFor, setArchiveFor] = useState<Product | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 300);
@@ -68,16 +71,15 @@ export default function Products() {
   useEffect(load, [load]);
 
   async function archive(product: Product) {
-    if (
-      !window.confirm(
-        `Archive "${product.name}"? It disappears from the product list and stock history is kept.`,
-      )
-    ) {
-      return;
-    }
+    setArchiveFor(product);
+  }
+
+  async function confirmArchive() {
+    if (!archiveFor) return;
 
     try {
-      await api(`/api/merchant/products/${product.id}`, { method: "DELETE" });
+      await api(`/api/merchant/products/${archiveFor.id}`, { method: "DELETE" });
+      setArchiveFor(null);
       load();
     } catch (cause) {
       setError(errorMessage(cause));
@@ -226,6 +228,14 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => navigate(`/app/products/${product.id}`)}
+                      >
+                        View
+                      </Button>
+
                       {canStock && product.isActive ? (
                         <Button
                           size="sm"
@@ -304,6 +314,17 @@ export default function Products() {
             // A new category may have been typed in the dialog.
             loadCategories();
           }}
+        />
+      ) : null}
+
+      {archiveFor ? (
+        <ConfirmDialog
+          open={archiveFor !== null}
+          onClose={() => setArchiveFor(null)}
+          title="Archive product"
+          description={`Archive "${archiveFor.name}"? It disappears from the product list and stock history is kept.`}
+          confirmLabel="Archive"
+          onConfirm={() => void confirmArchive()}
         />
       ) : null}
 

@@ -18,6 +18,7 @@
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "user:create": "tsx src/scripts/create-user.ts",
+    "user:reset-password": "tsx src/scripts/reset-password.ts",
     "mail:test": "tsx src/scripts/send-test-mail.ts",
     "docs:openapi": "tsx src/scripts/export-openapi.ts"
   },

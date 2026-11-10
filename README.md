@@ -104,6 +104,17 @@ npm run user:create -- \
 `--merchant` accepts a merchant id or slug and is required for `merchant` and
 `staff`. `--phone` is optional and enables phone sign-in.
 
+Reset a password without sending mail:
+
+```bash
+npm run user:reset-password -- \
+  --email admin@mushak.local \
+  --password '<new-password>'
+```
+
+This hashes with Better Auth, creates the credential account if needed, and
+revokes the user's existing sessions.
+
 Roles and merchant links can also be edited directly with Drizzle Studio.
 `users.role` is constrained to the four role values; merchant-scoped accounts
 must have `users.merchant_id` set before they can use the API.

@@ -109,10 +109,23 @@ session response is cached in the browser.
 | Staff forgot the password | Shop owner: **Staff → Reset password**. |
 | Owner forgot the password | Use the email reset flow; the link is in the inbox with `MAIL_DRIVER=smtp`, or in `/tmp/mushak-mail` with the console driver. |
 | Owner has no working email | Update the email in the database, then use the reset flow. |
-| Platform admin forgot the password | Re-run `npm run seed:admin` with a new `ADMIN_PASSWORD` only if the account does not exist; otherwise reset the row through Better Auth or the database. |
+| Platform admin forgot the password | `npm run user:reset-password -- --email admin@mushak.local --password '<new-password>'`. |
 
 Resetting a staff password deletes that account's sessions. It does not change
 permissions.
+
+Reset any password from the CLI, without mail:
+
+```bash
+npm run user:reset-password -- \
+  --email admin@mushak.local \
+  --password '<new-password>'
+```
+
+The script uses Better Auth's hasher, creates the credential account if it is
+missing, and revokes the user's existing sessions. `seed:admin` only creates the
+account or repairs its role; it does not change the password of an existing
+user.
 
 ## Deactivation
 

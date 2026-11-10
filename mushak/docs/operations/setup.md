@@ -193,6 +193,7 @@ roles or shop links, which have no UI.
 | `npm run seed:admin` | Create or repair the super admin |
 | `npm run seed:demo` | Seed the demo shop |
 | `npm run user:create -- …` | Provision a user from the CLI |
+| `npm run user:reset-password -- …` | Reset a password from the CLI without mail |
 | `npm run mail:test` | Send a sample message through the configured transport |
 | `npm run build` | Build the frontend and backend |
 | `npm run dev:mushak` | Run both dev servers |

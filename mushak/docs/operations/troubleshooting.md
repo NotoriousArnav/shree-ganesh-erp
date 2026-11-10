@@ -210,5 +210,6 @@ Remove secrets, emails and phone numbers before sharing the file.
 | `npm run db:migrate` | Apply migrations |
 | `npm run seed:admin` | Repair the platform administrator |
 | `npm run user:create -- …` | Provision a user |
+| `npm run user:reset-password -- …` | Reset a password without mail |
 | `npm run mail:test` | Check the mailer |
 | `npm run build` | Catch type and build errors |

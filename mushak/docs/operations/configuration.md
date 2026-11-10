@@ -38,10 +38,11 @@ different `DATABASE_URL`.
 | `FRONTEND_URL` | `http://localhost:5173` | Yes | Public frontend origin; trusted for auth and storage CORS. |
 | `TRUSTED_ORIGINS` | empty | For extra origins | Comma-separated list, e.g. `https://shop.example.com,http://192.168.1.42:5173`. |
 
-Origins are normalised without a trailing slash. In development, every LAN IPv4
-address of the machine is added automatically on the frontend's port, so a phone
-on the same Wi-Fi can sign in after a router address change. `NODE_ENV=production`
-turns that off.
+Origins are normalised without a trailing slash. In development, loopback
+(`localhost`, `127.0.0.1`, `[::1]`) and every LAN IPv4 address of the machine
+are added automatically on the frontend's port, so a phone on the same Wi-Fi can
+sign in after a router address change. `NODE_ENV=production` turns that off and
+only the configured origins are trusted.
 
 ## First administrator
 

@@ -75,6 +75,11 @@ For a deployed frontend on a different host or port, add it to
 `TRUSTED_ORIGINS` in the backend environment. Also allow that origin in the
 storage bucket; the backend writes the bucket CORS policy on first use.
 
+The origin is the scheme, host and port shown in the address bar.
+`http://localhost:5173` and `http://127.0.0.1:5173` are different origins; the
+development backend trusts both, but any other host name must be added to
+`TRUSTED_ORIGINS`. A rejected origin returns `Invalid origin` on sign-in.
+
 ## Theme
 
 The sun/moon button switches between light and dark. The choice is remembered on

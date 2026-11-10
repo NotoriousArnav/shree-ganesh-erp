@@ -26,6 +26,12 @@ export function buildTrustedOrigins(): string[] {
   if (process.env.NODE_ENV !== "production") {
     const port = frontend.port || (frontend.protocol === "https:" ? "443" : "80");
 
+    // Loopback is skipped by the networkInterfaces() loop below. Trust both
+    // spellings so http://localhost:5173 and http://127.0.0.1:5173 behave the
+    // same; otherwise signing in from 127.0.0.1 fails with "Invalid origin".
+    origins.add(`${frontend.protocol}//127.0.0.1:${port}`);
+    origins.add(`${frontend.protocol}//[::1]:${port}`);
+
     for (const addresses of Object.values(networkInterfaces())) {
       for (const address of addresses ?? []) {
         if (address.internal || address.family !== "IPv4") continue;

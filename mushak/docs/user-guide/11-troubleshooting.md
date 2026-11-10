@@ -20,6 +20,29 @@ or the backend being unavailable.
 The shop owner or a platform administrator deactivated the account. Ask them to
 reactivate it. Resetting the password does not reactivate an account.
 
+### “Invalid origin” when signing in
+
+The backend only accepts sign-in requests from origins it trusts. The browser's
+address bar decides the origin, so these are different to the backend:
+
+- `http://localhost:5173` — trusted by default;
+- `http://127.0.0.1:5173` — trusted in development since it is the same
+  loopback interface;
+- `http://<laptop-lan-ip>:5173` — trusted in development;
+- `http://<some-other-host>:5173` — **not** trusted.
+
+Open the frontend at `localhost` or the machine's LAN address, or add the exact
+origin (scheme, host and port) to `TRUSTED_ORIGINS` in the backend environment
+and restart it:
+
+```dotenv
+TRUSTED_ORIGINS=http://mushak.local:5173,https://shop.example.in
+```
+
+`NODE_ENV=production` turns off automatic LAN and loopback origins, so a deployed
+frontend must be listed explicitly. The backend log names the rejected origin and
+prints the trusted list.
+
 ### The page keeps returning to sign-in
 
 The browser is not keeping the session cookie. Check:

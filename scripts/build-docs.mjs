@@ -26,8 +26,9 @@ const SKIPPED_TOP = new Set([
   "node_modules",
   "public",
   "site",
-  ".git",
   "dist",
+  "packages",
+  ".git",
 ]);
 
 function findApps(root) {
@@ -45,6 +46,35 @@ function findApps(root) {
     if (stat.isDirectory()) apps.push(entry.name);
   }
   return apps.sort();
+}
+
+/**
+ * The site root that the built docs are served from. Each app is published at
+ * `<prefix>/<app>/`.
+ *
+ * - Local builds leave this unset so Hugo emits relative URLs and the output
+ *   can be opened straight from disk (`file://`) or any static host.
+ * - CI sets DOCS_BASE_PREFIX from actions/configure-pages (`base_url`), which
+ *   already includes the repo path or custom domain. Do not hard-code it here:
+ *   that is what previously produced `/docs/mushak/...` asset URLs while the
+ *   artifact was served from `/mushak/...`, so every stylesheet 404'd.
+ * - If a CI run forgets the variable, fall back to the GitHub project-pages
+ *   URL derived from GITHUB_REPOSITORY.
+ */
+function resolveDeployPrefix() {
+  const configured = process.env.DOCS_BASE_PREFIX;
+  if (configured && configured.trim().length > 0) return configured.trim();
+
+  if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_REPOSITORY) {
+    const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+    if (!owner || !repo) return null;
+    if (repo.toLowerCase() === `${owner.toLowerCase()}.github.io`) {
+      return `https://${repo}/`;
+    }
+    return `https://${owner}.github.io/${repo}/`;
+  }
+
+  return null;
 }
 
 function rebase(target, ups) {
@@ -84,13 +114,26 @@ function rewriteDocs(contentDir) {
       /\[([^\]]*)\]\(([^)]+)\)/g,
       (m, label, target) => {
         if (
-          target.endsWith(".md") &&
-          !target.startsWith("http") &&
-          !target.startsWith("#")
+          target.startsWith("http") ||
+          target.startsWith("#") ||
+          target.startsWith("mailto:")
         ) {
-          return `[${label}]({{< relref "${target}" >}})`;
+          return m;
         }
-        return m;
+
+        // Split `page.md#section` so the fragment survives the relref call.
+        const hashIndex = target.indexOf("#");
+        let pathPart =
+          hashIndex === -1 ? target : target.slice(0, hashIndex);
+        const fragment = hashIndex === -1 ? "" : target.slice(hashIndex);
+        if (!pathPart.endsWith(".md")) return m;
+
+        // README files were renamed to _index.md, so point at the section page.
+        if (/(^|\/)README\.md$/.test(pathPart)) {
+          pathPart = pathPart.replace(/README\.md$/, "_index.md");
+        }
+
+        return `[${label}]({{< relref "${pathPart}" >}}${fragment})`;
       },
     );
 
@@ -103,25 +146,49 @@ function buildApp(app) {
   const dest = path.join(ROOT, "site", "apps", app);
   const content = path.join(dest, "content");
   const staticDir = path.join(dest, "static");
-  const basePrefix =
-    process.env.DOCS_BASE_PREFIX || "https://notoriousarnav.github.io/shree-ganesh-erp/docs/";
-  const deployBaseURL = `${basePrefix.replace(/\/?$/, "/")}${app}/`;
-  const isCI = process.env.GITHUB_ACTIONS === "true" || process.env.CI === "true";
-  const baseURL = isCI || process.env.DOCS_BASE_PREFIX ? deployBaseURL : "/";
-  const relativeURLs = baseURL === "/";
+  const deployPrefix = resolveDeployPrefix();
+  const baseURL = deployPrefix
+    ? `${deployPrefix.replace(/\/?$/, "/")}${app}/`
+    : "/";
+  const relativeURLs = deployPrefix === null;
 
   fs.rmSync(content, { recursive: true, force: true });
   fs.rmSync(staticDir, { recursive: true, force: true });
   fs.mkdirSync(content, { recursive: true });
   fs.mkdirSync(staticDir, { recursive: true });
   fs.cpSync(src, content, { recursive: true });
-  if (fs.existsSync(path.join(content, "README.md"))) {
-    fs.renameSync(path.join(content, "README.md"), path.join(content, "_index.md"));
-  }
-  const srcAssets = path.join(src, "assets");
-  if (fs.existsSync(srcAssets)) {
-    fs.cpSync(srcAssets, path.join(staticDir, "assets"), { recursive: true });
-  }
+
+  // Hugo treats README.md as an ordinary page (`/api/readme/`), but a folder's
+  // README is meant to be its landing page. Renaming every README to _index.md
+  // gives `/api/` instead of `/api/readme/` and keeps sibling relative links
+  // (for example `openapi.json`) pointing at the right directory.
+  const renameReadmes = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) renameReadmes(full);
+      else if (entry.name === "README.md") {
+        fs.renameSync(full, path.join(dir, "_index.md"));
+      }
+    }
+  };
+  renameReadmes(content);
+  // Publish every non-Markdown file (images, checked-in openapi.json, …)
+  // under its original path. Hugo only renders Markdown, so anything else in
+  // the docs tree would otherwise 404 when a page links to it.
+  const copyStatic = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        copyStatic(full);
+        continue;
+      }
+      if (entry.name.endsWith(".md")) continue;
+      const target = path.join(staticDir, path.relative(src, full));
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(full, target);
+    }
+  };
+  copyStatic(src);
 
   const title = app.charAt(0).toUpperCase() + app.slice(1);
   fs.writeFileSync(
@@ -171,7 +238,112 @@ canonifyURLs = false
     ],
     { stdio: "inherit" },
   );
+
+  verifyBuiltAssets(app, baseURL);
   return { app, baseURL };
+}
+
+/**
+ * Fails the build when a page points at a local file that Hugo did not emit.
+ * This is the guard against a baseURL that does not match the path the site is
+ * actually served from (the bug that silently removed the stylesheet).
+ */
+function verifyBuiltAssets(app, baseURL) {
+  const dir = path.join(OUT, app);
+  const origin = baseURL === "/" ? null : new URL(baseURL).origin;
+  const basePath = baseURL === "/" ? "/" : new URL(baseURL).pathname;
+
+  const pages = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".html")) pages.push(full);
+    }
+  };
+  walk(dir);
+
+  const missing = [];
+  const seen = new Set();
+
+  for (const page of pages) {
+    const pageRel = `/${path.relative(dir, page).split(path.sep).join("/")}`;
+    const text = fs.readFileSync(page, "utf8");
+
+    for (const match of text.matchAll(/(?:href|src)="([^"]+)"/g)) {
+      const raw = match[1];
+      if (
+        !raw ||
+        raw.startsWith("#") ||
+        raw.startsWith("data:") ||
+        raw.startsWith("mailto:") ||
+        raw.startsWith("tel:") ||
+        raw.startsWith("javascript:") ||
+        raw.startsWith("//")
+      ) {
+        continue;
+      }
+
+      let target;
+      if (/^https?:\/\//i.test(raw)) {
+        // Absolute links are only ours when they sit under this app's base.
+        if (!origin || !raw.startsWith(origin)) continue;
+        target = raw.slice(origin.length);
+        if (target.startsWith(basePath)) {
+          target = `/${target.slice(basePath.length)}`;
+        } else if (target === basePath.replace(/\/$/, "")) {
+          target = "/";
+        } else {
+          continue;
+        }
+      } else if (raw.startsWith("/")) {
+        // Hugo emits root-relative links that already include the Pages base
+        // path (for example `/repo/app/favicon.svg`); strip it before resolving
+        // against the app's output directory.
+        if (basePath !== "/") {
+          if (raw.startsWith(basePath)) {
+            target = `/${raw.slice(basePath.length)}`;
+          } else {
+            continue;
+          }
+        } else {
+          target = raw;
+        }
+      } else {
+        target = path.posix.normalize(
+          path.posix.join(path.posix.dirname(pageRel), raw),
+        );
+      }
+
+      target = target.split("#")[0].split("?")[0];
+      if (!target || target === "/") continue;
+
+      const key = `${pageRel}::${target}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let decoded = target;
+      try {
+        decoded = decodeURIComponent(target);
+      } catch {
+        // Keep the raw path; existsSync will simply report it missing.
+      }
+      const candidate = path.join(dir, decoded.replace(/^\//, ""));
+      const exists =
+        fs.existsSync(candidate) &&
+        (fs.statSync(candidate).isFile() ||
+          fs.existsSync(path.join(candidate, "index.html")));
+
+      if (!exists) missing.push(`${path.relative(ROOT, page)} -> ${raw}`);
+    }
+  }
+
+  if (missing.length > 0) {
+    const preview = missing.slice(0, 20).join("\n  ");
+    throw new Error(
+      `build-docs.mjs: ${app} references ${missing.length} missing local asset(s):\n  ${preview}`,
+    );
+  }
 }
 
 function getAppDescription(app) {

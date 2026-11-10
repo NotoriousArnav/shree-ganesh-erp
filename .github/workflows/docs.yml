@@ -31,11 +31,17 @@ jobs:
           hugo-version: "0.169.0"
           extended: true
 
-      - name: Build docs
-        run: npm run docs:all
-
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@v5
+
+      - name: Build docs
+        env:
+          # The artifact uploaded below is the site root, so apps are served
+          # from <base_url>/<app>/. Feeding the real URL here keeps absolute
+          # asset links (stylesheet, search index) pointing at files that exist.
+          DOCS_BASE_PREFIX: ${{ steps.pages.outputs.base_url }}/
+        run: npm run docs:all
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -57,8 +57,9 @@ In development `MAIL_DRIVER=console`. No mail leaves the machine:
 Open the newest file and copy the reset link. If the directory is empty, check
 that the backend process has write access.
 
-In production, mail still uses the console driver until an SMTP transport is
-added. See [Mail](../operations/mail.md).
+In production the transport is configured with `MAIL_DRIVER=smtp`. If mail does
+not arrive there, check the SMTP credentials and the provider's SPF, DKIM and
+DMARC records. See [Mail](../operations/mail.md).
 
 ### “Reset link is invalid or expired”
 

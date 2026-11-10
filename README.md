@@ -136,12 +136,14 @@ example for an anime/figurine shop:
 
 Mail goes through `AbstractMailer` (`mushak/backend/src/mail/mailer.ts`).
 A transport only implements `deliver()`; validation, recipients, the generated
-message id and the MIME body are shared.
+message id and the rendered body are shared.
 
-The current transport is `ConsoleMailer`:
+Two transports ship:
 
-- prints From/To/Subject/body to the terminal
-- writes a `.eml` and a `.json` copy to `/tmp/mushak-mail` (mode `0600`)
+- `console` — prints From/To/Subject/body to the terminal and writes a `.eml`
+  and a `.json` copy to `/tmp/mushak-mail` (mode `0600`). Development only.
+- `smtp` — delivers through any SMTP provider (SES, Resend, Postmark, Mailgun,
+  Brevo, Mailpit) using Nodemailer.
 
 ```bash
 npm run mail:test                       # send a sample message
@@ -154,17 +156,25 @@ Configuration in `mushak/backend/.env`:
 MAIL_DRIVER=console
 MAIL_FROM=Mushak <no-reply@mushak.local>
 MAIL_DIR=/tmp/mushak-mail
+
+# When MAIL_DRIVER=smtp
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=true
+SMTP_USER=
+SMTP_PASS=
 ```
 
 Password-reset and email-verification hooks already use the mailer, so
-requesting a reset prints the link instead of sending it while `MAIL_DRIVER`
-is `console`. The full browser flow is:
+requesting a reset prints the link while `MAIL_DRIVER` is `console`, and sends
+it to the inbox when it is `smtp`. The full browser flow is:
 
 `/login` → **Forgot password?** → `/forgot-password` → emailed link →
 `/reset-password` → sign in with the new password.
 
-To add SMTP, extend `AbstractMailer` with a transport that implements
-`deliver()` and select it in `getMailer()`.
+See `mushak/docs/operations/mail.md` for provider recipes, STARTTLS/TLS
+behaviour, DNS (SPF/DKIM/DMARC) and troubleshooting.
 
 ## Object storage
 

@@ -59,9 +59,17 @@ Remove or rotate the admin password after the first sign-in.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `MAIL_DRIVER` | `console` | Only `console` is implemented. Any other value throws. |
-| `MAIL_FROM` | `Mushak <no-reply@mushak.local>` | From header. |
+| `MAIL_DRIVER` | `console` | `console` or `smtp`. Any other value throws. |
+| `MAIL_FROM` | `Mushak <no-reply@mushak.local>` | From header. Use a real address on a verified domain in production. |
 | `MAIL_DIR` | `/tmp/mushak-mail` | Where the console mailer writes `.eml` and `.json` files. |
+| `SMTP_HOST` | none | Required when `MAIL_DRIVER=smtp`. |
+| `SMTP_PORT` | `587` | `465` when `SMTP_SECURE=true` and no port is set. |
+| `SMTP_SECURE` | port `465` | Implicit TLS. |
+| `SMTP_REQUIRE_TLS` | `true` when not secure | STARTTLS upgrade. |
+| `SMTP_USER` | none | Set with `SMTP_PASS`; leave both empty for an open relay. |
+| `SMTP_PASS` | none | Password or provider API key. |
+| `SMTP_ALLOW_INVALID_CERT` | `false` | Development only. |
+| `SMTP_TIMEOUT_MS` | `10000` | Connection timeouts. |
 
 See [Mail](mail.md).
 
@@ -124,8 +132,14 @@ BETTER_AUTH_URL=https://mushak.example.com
 FRONTEND_URL=https://mushak.example.com
 TRUSTED_ORIGINS=https://shop.example.com
 
-MAIL_DRIVER=console
+MAIL_DRIVER=smtp
 MAIL_FROM=Mushak <no-reply@mushak.example.com>
+SMTP_HOST=email-smtp.ap-south-1.amazonaws.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=true
+SMTP_USER=<smtp-username>
+SMTP_PASS=<smtp-password>
 MAIL_DIR=/var/lib/mushak/mail
 
 STORAGE_DRIVER=s3
@@ -138,9 +152,9 @@ S3_FORCE_PATH_STYLE=false
 S3_PUBLIC_URL=https://cdn.example.com/mushak
 ```
 
-Because only the console mailer exists, a public deployment cannot deliver
-password-reset mail yet. Plan for SMTP before exposing self-service resets. See
-[Mail](mail.md).
+A public deployment needs `MAIL_DRIVER=smtp` and a sending domain with SPF,
+DKIM and DMARC before you expose self-service password resets. `MAIL_DIR` is
+then only a fallback for the console driver. See [Mail](mail.md).
 
 ## Secret handling
 

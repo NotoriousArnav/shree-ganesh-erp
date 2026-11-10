@@ -26,7 +26,7 @@ Check the process output first. Common causes:
 | Message | Cause | Fix |
 | --- | --- | --- |
 | `DATABASE_URL is not set` | Missing `.env` or environment | Copy `.env.example`; set the variable |
-| `Unsupported MAIL_DRIVER` | A driver other than `console` | Use `console`, or add a transport |
+| `Unsupported MAIL_DRIVER` | A driver other than `console` or `smtp` | Use `console`, `smtp`, or add a transport |
 | `Unsupported STORAGE_DRIVER` | A driver other than `s3` | Use `s3` |
 | `EADDRINUSE` | Port 8080 is taken | Stop the other process or set `PORT` |
 | `password authentication failed` | Wrong database credentials | Fix `DATABASE_URL` |
@@ -125,13 +125,15 @@ aws --endpoint-url http://localhost:9000 s3 ls s3://mushak/
 
 ## Mail problems
 
-Only the console driver exists.
+Start with `MAIL_DRIVER`.
 
-- The message is printed in the backend terminal.
-- Files are under `MAIL_DIR` (`/tmp/mushak-mail`).
-- A production deployment will not deliver mail.
+- `console` prints the message in the backend terminal and writes files under
+  `MAIL_DIR` (`/tmp/mushak-mail`).
+- `smtp` sends through `SMTP_HOST`. Check the backend log for the provider's
+  error code; `EAUTH`, `ETIMEDOUT` and certificate errors are the usual causes.
+- `npm run mail:test -- you@example.com` isolates mail from the reset flow.
 
-See [Mail](mail.md) for the reset flow and the SMTP gap.
+See [Mail](mail.md) for configuration, provider recipes and the reset flow.
 
 ## Ports and containers
 

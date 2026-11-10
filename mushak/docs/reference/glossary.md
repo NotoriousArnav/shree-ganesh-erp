@@ -26,8 +26,11 @@ and prices. One per product.
 **Category** — A shop-scoped group for products. Names are unique within a shop.
 Deleting a category uncategorises its products.
 
-**Console mailer** — The only mail transport today. Prints messages to the
+**Console mailer** — The development mail transport. Prints messages to the
 terminal and writes `.eml`/`.json` files under `MAIL_DIR`.
+
+**SMTP mailer** — The production mail transport. Delivers through any SMTP
+server configured with `SMTP_HOST` and the related variables.
 
 **Currency** — A display label on the shop, default `INR`. Not converted.
 

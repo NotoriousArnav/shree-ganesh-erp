@@ -45,9 +45,10 @@ If you are already signed in, opening `/login` redirects you into the app.
 2. Enter the email address on the account.
 3. Open the link in the reset email and choose a new password.
 
-In development, no email is delivered. `MAIL_DRIVER=console` prints the message
-in the backend terminal and saves it under `/tmp/mushak-mail` by default. Open
-the `.eml` or `.json` file and copy the reset link.
+In development, no email leaves the machine. `MAIL_DRIVER=console` prints the
+message in the backend terminal and saves it under `/tmp/mushak-mail` by
+default. Open the `.eml` or `.json` file and copy the reset link. A deployment
+with `MAIL_DRIVER=smtp` sends the link to the user's inbox instead.
 
 The reset link is single-use and expires. Request a new one if it is rejected.
 

@@ -31,8 +31,19 @@ export type MailResult = {
   transport: string;
   to: string[];
   subject: string;
+  /** Local file the message was written to, for file-backed transports. */
   savedTo?: string;
+  /** Provider-assigned message id, for network transports. */
+  messageId?: string;
 };
+
+/** What a transport reports back after handing a message off. */
+export type DeliveryResult =
+  | void
+  | {
+      savedTo?: string;
+      messageId?: string;
+    };
 
 /**
  * Base class for every mail transport.
@@ -48,14 +59,15 @@ export abstract class AbstractMailer {
 
   async send(message: MailMessage): Promise<MailResult> {
     const mail = this.render(message);
-    const savedTo = await this.deliver(mail);
+    const delivery = await this.deliver(mail);
 
     return {
       id: mail.id,
       transport: this.transport,
       to: mail.to,
       subject: mail.subject,
-      ...(savedTo ? { savedTo } : {}),
+      ...(delivery?.savedTo ? { savedTo: delivery.savedTo } : {}),
+      ...(delivery?.messageId ? { messageId: delivery.messageId } : {}),
     };
   }
 
@@ -84,7 +96,7 @@ export abstract class AbstractMailer {
     };
   }
 
-  protected abstract deliver(mail: RenderedMail): Promise<string | void>;
+  protected abstract deliver(mail: RenderedMail): Promise<DeliveryResult>;
 }
 
 export function normalizeRecipients(value: MailRecipients | undefined): string[] {

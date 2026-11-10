@@ -193,7 +193,7 @@ roles or shop links, which have no UI.
 | `npm run seed:admin` | Create or repair the super admin |
 | `npm run seed:demo` | Seed the demo shop |
 | `npm run user:create -- …` | Provision a user from the CLI |
-| `npm run mail:test` | Write a sample message with the console mailer |
+| `npm run mail:test` | Send a sample message through the configured transport |
 | `npm run build` | Build the frontend and backend |
 | `npm run dev:mushak` | Run both dev servers |
 
@@ -226,8 +226,8 @@ Production checklist:
 - `TRUSTED_ORIGINS` for every extra frontend origin;
 - TLS at the proxy;
 - real Postgres and object storage, with backups;
-- `MAIL_DRIVER=console` is **not** suitable for public password resets; see
-  [Mail](mail.md).
+- `MAIL_DRIVER=smtp` with a verified sending domain before public password
+  resets; see [Mail](mail.md).
 
 ## Reset a development environment
 

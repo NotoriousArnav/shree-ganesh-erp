@@ -90,7 +90,8 @@ the email exists, to avoid revealing accounts. When it exists, the mailer sends
 a link to `redirectTo?token=…`.
 
 In development the console mailer writes the message to `MAIL_DIR`
-(`/tmp/mushak-mail`) instead of sending it.
+(`/tmp/mushak-mail`) instead of sending it. With `MAIL_DRIVER=smtp` the link is
+delivered to the account's inbox.
 
 ```bash
 ls -t /tmp/mushak-mail | head

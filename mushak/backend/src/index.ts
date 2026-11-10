@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import { client, db } from "./db.js";
+import { closeMailer } from "./mail/index.js";
 import { createMcpServer } from "./mcp.js";
 import { openapiSpec } from "./openapi.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
@@ -87,6 +88,7 @@ const host = process.env.HOST ?? "0.0.0.0";
 
 const shutdown = async () => {
   await app.close();
+  closeMailer();
   await client.end({ timeout: 5 });
   process.exit(0);
 };

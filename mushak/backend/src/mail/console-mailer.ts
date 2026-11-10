@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { AbstractMailer, type RenderedMail } from "./mailer.js";
+import { AbstractMailer, type DeliveryResult, type RenderedMail } from "./mailer.js";
 
 export type ConsoleMailerOptions = {
   from: string;
@@ -33,7 +33,7 @@ export class ConsoleMailer extends AbstractMailer {
     }
   }
 
-  protected async deliver(mail: RenderedMail): Promise<string> {
+  protected async deliver(mail: RenderedMail): Promise<DeliveryResult> {
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
 
     const stamp = mail.date.toISOString().replace(/[:.]/g, "-");
@@ -70,7 +70,7 @@ export class ConsoleMailer extends AbstractMailer {
     );
 
     printMail(mail, emlPath, jsonPath);
-    return emlPath;
+    return { savedTo: emlPath };
   }
 }
 

@@ -2,8 +2,8 @@ import "dotenv/config";
 import { parseArgs } from "node:util";
 import { eq } from "drizzle-orm";
 
-import { db, client } from "../db.js";
-import { merchants, userRoleValues, users } from "../db/schema.js";
+import { db, client } from "@ganesh/db";
+import { merchants, userRoleValues, users } from "@ganesh/db/schema";
 
 /**
  * Provisions a user without the public sign-up endpoint.
@@ -85,7 +85,7 @@ if (merchantScoped) {
   process.exit(1);
 }
 
-const { auth } = await import("../auth.js");
+const { auth } = await import("@ganesh/server/auth");
 
 const existing = await db
   .select({ id: users.id })

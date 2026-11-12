@@ -2,22 +2,22 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { auth } from "../auth.js";
-import { db } from "../db.js";
+import { auth } from "@ganesh/server/auth";
+import { db } from "@ganesh/db";
 import {
   staffPermissionValues,
   users,
   type StaffPermission,
-} from "../db/schema.js";
+} from "@ganesh/db/schema";
 import {
   normalizePermissions,
   requireOwner,
   type MerchantAccess,
-} from "../http/auth-guard.js";
+} from "@ganesh/server/http/auth-guard";
 import {
   isUniqueViolation,
   uniqueConstraint,
-} from "../http/pg-errors.js";
+} from "@ganesh/server/http/pg-errors";
 
 /**
  * Staff management for merchants.

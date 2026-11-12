@@ -9,9 +9,14 @@ if (!url) {
   );
 }
 
+/**
+ * Migrations live in the shared database package so every suite app uses one
+ * schema and one history. This config stays in the backend because that is
+ * where the env file and the docker compose stack live.
+ */
 export default defineConfig({
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
+  schema: "../../packages/db/src/schema.ts",
+  out: "../../packages/db/drizzle",
   dialect: "postgresql",
   dbCredentials: { url },
   verbose: true,

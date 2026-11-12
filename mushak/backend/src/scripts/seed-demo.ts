@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { and, eq } from "drizzle-orm";
 
-import { db, client } from "../db.js";
+import { db, client } from "@ganesh/db";
 import {
   catalogueItems,
   categories,
@@ -9,7 +9,7 @@ import {
   merchants,
   stockMovements,
   users,
-} from "../db/schema.js";
+} from "@ganesh/db/schema";
 
 /**
  * Seeds a demo shop: merchant, two logins, categories and a small catalogue.
@@ -182,7 +182,7 @@ const CATALOGUE = [
   },
 ];
 
-const { auth } = await import("../auth.js");
+const { auth } = await import("@ganesh/server/auth");
 
 let [merchant] = await db
   .select()

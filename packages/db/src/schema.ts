@@ -2,7 +2,9 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   index,
+  integer,
   jsonb,
   numeric,
   pgEnum,
@@ -205,6 +207,200 @@ export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type NewInventoryItem = typeof inventoryItems.$inferInsert;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type NewStockMovement = typeof stockMovements.$inferInsert;
+
+/*
+ * Lokkhi: invoices.
+ *
+ * Invoice lines are self-contained snapshots. `catalogueItemId` is optional and
+ * nullable on purpose: Mushak is a suggestion source, never a validation gate,
+ * so an invoice must remain valid when the product is missing, archived or
+ * deleted. Snapshot columns are therefore NOT NULL and are never rewritten when
+ * the catalogue changes.
+ */
+
+export const invoiceKindValues = ["sale", "purchase"] as const;
+export type InvoiceKind = (typeof invoiceKindValues)[number];
+export const invoiceKind = pgEnum("invoice_kind", invoiceKindValues);
+
+export const invoiceStatusValues = ["draft", "issued", "void"] as const;
+export type InvoiceStatus = (typeof invoiceStatusValues)[number];
+export const invoiceStatus = pgEnum("invoice_status", invoiceStatusValues);
+
+export const invoiceLineStockStateValues = [
+  "not_applicable",
+  "synced",
+  "failed",
+] as const;
+export type InvoiceLineStockState =
+  (typeof invoiceLineStockStateValues)[number];
+export const invoiceLineStockState = pgEnum(
+  "invoice_line_stock_state",
+  invoiceLineStockStateValues,
+);
+
+/** One counter per shop, kind and financial year (`SALE/2026-27/0001`). */
+export const invoiceSequences = pgTable(
+  "invoice_sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    kind: invoiceKind("kind").notNull(),
+    financialYear: text("financial_year").notNull(),
+    nextNumber: integer("next_number").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("invoice_sequences_merchant_kind_year_idx").on(
+      t.merchantId,
+      t.kind,
+      t.financialYear,
+    ),
+  ],
+);
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    kind: invoiceKind("kind").notNull(),
+    status: invoiceStatus("status").default("draft").notNull(),
+    /** Null while draft; assigned atomically on issue. */
+    number: text("number"),
+    financialYear: text("financial_year"),
+    invoiceDate: date("invoice_date", { mode: "string" }).notNull(),
+    dueDate: date("due_date", { mode: "string" }),
+    /** Free-form party snapshot; there is no parties table in v1. */
+    partyName: text("party_name").notNull(),
+    partyPhone: text("party_phone"),
+    partyGstin: text("party_gstin"),
+    /** line1, line2, city, state, pincode. */
+    partyAddress: jsonb("party_address").$type<Record<string, string>>(),
+    currency: text("currency").default("INR").notNull(),
+    notes: text("notes"),
+    subtotal: numeric("subtotal", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    discountTotal: numeric("discount_total", {
+      precision: 12,
+      scale: 2,
+      mode: "number",
+    })
+      .default(0)
+      .notNull(),
+    taxTotal: numeric("tax_total", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    total: numeric("total", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (t) => [
+    index("invoices_merchant_date_idx").on(t.merchantId, t.invoiceDate),
+    index("invoices_merchant_status_idx").on(t.merchantId, t.status),
+    uniqueIndex("invoices_merchant_number_idx").on(t.merchantId, t.number),
+  ],
+);
+
+export const invoiceLines = pgTable(
+  "invoice_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    position: integer("position").default(0).notNull(),
+    /**
+     * Optional link to Mushak. `set null` keeps the snapshot valid when the
+     * product is deleted, which is exactly the redundancy rule.
+     */
+    catalogueItemId: uuid("catalogue_item_id").references(
+      () => catalogueItems.id,
+      { onDelete: "set null" },
+    ),
+    itemName: text("item_name").notNull(),
+    sku: text("sku"),
+    hsnCode: text("hsn_code"),
+    unit: text("unit").default("pcs").notNull(),
+    quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" })
+      .notNull(),
+    unitPrice: numeric("unit_price", {
+      precision: 12,
+      scale: 2,
+      mode: "number",
+    })
+      .notNull(),
+    discount: numeric("discount", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    taxRate: numeric("tax_rate", { precision: 5, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    lineSubtotal: numeric("line_subtotal", {
+      precision: 12,
+      scale: 2,
+      mode: "number",
+    })
+      .default(0)
+      .notNull(),
+    lineTaxable: numeric("line_taxable", {
+      precision: 12,
+      scale: 2,
+      mode: "number",
+    })
+      .default(0)
+      .notNull(),
+    lineTax: numeric("line_tax", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    lineTotal: numeric("line_total", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    /** Set when the issue-time best-effort stock movement succeeded. */
+    stockMovementId: uuid("stock_movement_id").references(
+      () => stockMovements.id,
+      { onDelete: "set null" },
+    ),
+    stockSyncState: invoiceLineStockState("stock_sync_state")
+      .default("not_applicable")
+      .notNull(),
+    /** Human-readable reason when stockSyncState is `failed`. */
+    stockSyncNote: text("stock_sync_note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("invoice_lines_invoice_idx").on(t.invoiceId, t.position),
+    index("invoice_lines_catalogue_idx").on(t.catalogueItemId),
+  ],
+);
+
+export type InvoiceSequence = typeof invoiceSequences.$inferSelect;
+export type NewInvoiceSequence = typeof invoiceSequences.$inferInsert;
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type InvoiceLine = typeof invoiceLines.$inferSelect;
+export type NewInvoiceLine = typeof invoiceLines.$inferInsert;
 
 /*
  * Better Auth tables.

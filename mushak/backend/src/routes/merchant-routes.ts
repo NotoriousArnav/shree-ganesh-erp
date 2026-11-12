@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../db.js";
+import { db } from "@ganesh/db";
 import {
   catalogueItems,
   categories,
@@ -19,8 +19,8 @@ import {
   merchants,
   stockMovements,
   stockMovementType,
-} from "../db/schema.js";
-import { requireMerchant, requireMerchantOwner, requirePermission, can } from "../http/auth-guard.js";
+} from "@ganesh/db/schema";
+import { requireMerchant, requireMerchantOwner, requirePermission, can } from "@ganesh/server/http/auth-guard";
 import {
   buildDashboard,
   buildShopReport,
@@ -31,7 +31,7 @@ import {
 import {
   isUniqueViolation,
   uniqueConstraint,
-} from "../http/pg-errors.js";
+} from "@ganesh/server/http/pg-errors";
 
 /**
  * Merchant-side inventory API.

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 
-import { auth } from "../auth.js";
+import { auth } from "@ganesh/server/auth";
 
 /**
  * Bridges Fastify to Better Auth's Fetch-style handler.

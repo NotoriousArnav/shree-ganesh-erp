@@ -1,0 +1,49 @@
+{
+  "name": "@ganesh/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./http/auth-guard": {
+      "types": "./dist/http/auth-guard.d.ts",
+      "default": "./dist/http/auth-guard.js"
+    },
+    "./http/origins": {
+      "types": "./dist/http/origins.d.ts",
+      "default": "./dist/http/origins.js"
+    },
+    "./http/pg-errors": {
+      "types": "./dist/http/pg-errors.d.ts",
+      "default": "./dist/http/pg-errors.js"
+    },
+    "./mail": {
+      "types": "./dist/mail/index.d.ts",
+      "default": "./dist/mail/index.js"
+    },
+    "./routes/auth-routes": {
+      "types": "./dist/routes/auth-routes.d.ts",
+      "default": "./dist/routes/auth-routes.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ganesh/db": "0.0.0",
+    "better-auth": "^1.7.18",
+    "drizzle-orm": "^0.45.4",
+    "nodemailer": "^10.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "fastify": "^5.0.0",
+    "typescript": "^5.5.3"
+  }
+}

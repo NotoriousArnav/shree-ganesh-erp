@@ -1,6 +1,6 @@
 import { S3Storage } from "./s3-storage.js";
 import type { AbstractStorage } from "./storage.js";
-import { buildTrustedOrigins } from "../http/origins.js";
+import { buildTrustedOrigins } from "@ganesh/server/http/origins";
 
 export { AbstractStorage } from "./storage.js";
 export type {

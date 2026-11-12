@@ -1,0 +1,69 @@
+# How Lokkhi organises invoices
+
+## Draft and issued
+
+An invoice starts as a **draft**. A draft:
+
+- has no invoice number yet
+- can be edited and deleted
+- is private to your shop
+
+When you **issue** a draft, Lokkhi:
+
+1. assigns the next number for that kind and financial year
+2. freezes the lines
+3. records the issue time
+4. attempts the Mushak stock update
+
+After that the invoice can be printed or voided, but not edited. A **void**
+invoice keeps its number and its history; it is marked as void rather than
+deleted.
+
+## Numbering
+
+Numbers are separate per kind and per financial year:
+
+```text
+SALE/2026-27/0001
+SALE/2026-27/0002
+PUR/2026-27/0001
+```
+
+The financial year runs April to March. Counters are per shop, so another shop
+cannot consume your numbers.
+
+## Snapshot lines
+
+Every line stores its own copy of the item:
+
+| Stored on the line | Comes from |
+| --- | --- |
+| Item name | You, or the Mushak suggestion |
+| SKU and HSN | You, or the Mushak suggestion |
+| Unit | You, or the Mushak suggestion |
+| Quantity and price | You |
+| Discount and tax rate | You, or the Mushak suggestion |
+
+The line may also point at a Mushak product. That link is optional and it is
+never required for the invoice to be valid.
+
+## Tax
+
+Prices are **tax exclusive**. Tax is calculated per line, after discount:
+
+```text
+line subtotal = quantity × unit price
+line taxable  = subtotal − discount
+line tax      = taxable × tax rate ÷ 100
+line total    = taxable + tax
+```
+
+Lokkhi v1 stores one combined tax rate per line. It does not split CGST, SGST
+and IGST. The rate is printed on the invoice so the split can still be read the
+usual way; if you need a full split, that is a later feature.
+
+## Parties
+
+Customers and suppliers are **snapshots on the invoice** in v1. You type a name,
+phone and GSTIN. There is no separate address book yet, and renaming a party
+never changes old invoices.

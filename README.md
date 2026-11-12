@@ -1,11 +1,25 @@
 # Shree Ganesh ERP
 
-Mushak is the first application in the Shree Ganesh ERP suite.
+A suite of separate applications for small merchants. Each app runs on its own
+and shares the same shops, users and database.
+
+| App | What it does | Frontend | Backend | Docs |
+| --- | --- | --- | --- | --- |
+| **Mushak** | Catalogue, stock, categories, staff, dashboard, reports | 5173 | 8080 | [mushak/docs](mushak/docs/README.md) |
+| **Lokkhi** | Sales and purchase invoices, printing, optional Mushak links | 5175 | 8081 | [lokkhi/docs](lokkhi/docs/README.md) |
+
+Shared code lives in `packages/`: `@ganesh/db` (schema, client, migrations),
+`@ganesh/shared` (invoice maths, numbering, line status), `@ganesh/server`
+(auth, guards, mail).
+
+Invoices in Lokkhi are self-contained snapshots. Mushak is a suggestion source,
+never a validation gate: an item that is not in Mushak can still be billed,
+issued and printed.
 
 ## Stack
 
 - **Frontend** — React 18, React Router v7, Vite 5, PWA, TypeScript, Tailwind CSS v4
-- **Backend** — Fastify 5, TypeScript, OpenAPI/Swagger, MCP server
+- **Backend** — Fastify 5, TypeScript, OpenAPI/Swagger, MCP server (Mushak)
 - **Database** — PostgreSQL 17 in Docker, Drizzle ORM + `postgres.js`
 - **Auth** — Better Auth, email/password and phone/password, database sessions
 
@@ -14,6 +28,8 @@ Mushak is the first application in the Shree Ganesh ERP suite.
 ```bash
 npm install
 cp mushak/backend/.env.example mushak/backend/.env   # first run only
+npm install
+npm run build:packages                              # shared @ganesh/* packages
 npm run db:up                                        # start Postgres
 npm run db:migrate                                   # apply migrations
 npm run dev:mushak                                   # frontend + backend
@@ -26,6 +42,20 @@ npm run dev:mushak                                   # frontend + backend
 - Storage health: http://localhost:8080/health/storage
 - RustFS console: http://localhost:9001
 - Sign in: http://localhost:5173/login
+
+### Lokkhi
+
+```bash
+cp lokkhi/backend/.env.example lokkhi/backend/.env   # first run only
+npm run dev:lokkhi
+```
+
+- Frontend: http://localhost:5175
+- Backend: http://localhost:8081
+- API docs: http://localhost:8081/docs
+
+Lokkhi uses the same database and the same `BETTER_AUTH_SECRET`, so the account
+you use in Mushak also works there. See [lokkhi/docs](lokkhi/docs/README.md).
 
 Create the first admin after the initial setup:
 
@@ -370,5 +400,7 @@ whole suite; the frontend and backend workspace packages carry the same
 
 ## Current phase
 
-Phase 2 — Inventory schema, database connection, authentication, and the
-merchant inventory app (products, stock, categories, dashboard, staff access).
+Phase 3 — a second application, Lokkhi, with sales and purchase invoices,
+optional Mushak suggestions, best-effort stock integration, subtle per-line
+hints and an Add to Mushak action. Shared database and auth code now live in
+`packages/`.

@@ -1,13 +1,13 @@
 import { and, asc, desc, eq, isNull, lte, gte, sql } from "drizzle-orm";
 
-import { db } from "../db.js";
+import { db } from "@ganesh/db";
 import {
   catalogueItems,
   categories,
   inventoryItems,
   merchants,
   stockMovements,
-} from "../db/schema.js";
+} from "@ganesh/db/schema";
 
 /**
  * Shop dashboard and printable report queries.

@@ -2,10 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../db.js";
-import { merchants, staffPermissionValues, users } from "../db/schema.js";
-import { allStaffPermissions, requireRole } from "../http/auth-guard.js";
-import { isUniqueViolation } from "../http/pg-errors.js";
+import { db } from "@ganesh/db";
+import { merchants, staffPermissionValues, users } from "@ganesh/db/schema";
+import { allStaffPermissions, requireRole } from "@ganesh/server/http/auth-guard";
+import { isUniqueViolation } from "@ganesh/server/http/pg-errors";
 import { provisionMerchantAccount } from "./staff-routes.js";
 
 export async function registerAdminRoutes(app: FastifyInstance) {

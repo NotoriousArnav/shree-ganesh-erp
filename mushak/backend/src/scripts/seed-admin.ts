@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { eq } from "drizzle-orm";
 
-import { db, client } from "../db.js";
-import { users } from "../db/schema.js";
+import { db, client } from "@ganesh/db";
+import { users } from "@ganesh/db/schema";
 
 /**
  * Creates the first super admin, or repairs an existing account.
@@ -24,7 +24,7 @@ if (!email || !password) {
   process.exit(1);
 }
 
-const { auth } = await import("../auth.js");
+const { auth } = await import("@ganesh/server/auth");
 
 const existing = await db
   .select({ id: users.id, role: users.role })

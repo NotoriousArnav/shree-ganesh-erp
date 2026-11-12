@@ -4,17 +4,23 @@
   "private": true,
   "license": "MIT",
   "workspaces": [
+    "packages/*",
     "mushak/frontend",
-    "mushak/backend"
+    "mushak/backend",
+    "lokkhi/frontend",
+    "lokkhi/backend"
   ],
   "scripts": {
+    "build:packages": "npm run build -w packages/db && npm run build -w packages/shared && npm run build -w packages/server",
     "dev:frontend": "npm run dev -w mushak/frontend",
     "dev:backend": "npm run dev -w mushak/backend",
     "build:frontend": "npm run build -w mushak/frontend",
     "build:backend": "npm run build -w mushak/backend",
-    "build": "npm run build -w mushak/frontend && npm run build -w mushak/backend",
-    "dev:mushak": "npm run dev --workspaces",
-    "build:mushak": "npm run build --workspaces",
+    "build": "npm run build:packages && npm run build:mushak && npm run build:lokkhi",
+    "dev:mushak": "npm run dev -w mushak/frontend -w mushak/backend",
+    "build:mushak": "npm run build -w mushak/frontend -w mushak/backend",
+    "dev:lokkhi": "npm run dev -w lokkhi/frontend -w lokkhi/backend",
+    "build:lokkhi": "npm run build -w lokkhi/frontend -w lokkhi/backend",
     "db:up": "npm run db:up -w mushak/backend",
     "db:down": "npm run db:down -w mushak/backend",
     "db:migrate": "npm run db:migrate -w mushak/backend",
@@ -25,7 +31,8 @@
     "mail:test": "npm run mail:test -w mushak/backend --",
     "docs:openapi": "npm run docs:openapi -w mushak/backend",
     "docs:all": "node scripts/build-docs.mjs all",
-    "docs:mushak": "node scripts/build-docs.mjs mushak"
+    "docs:mushak": "node scripts/build-docs.mjs mushak",
+    "docs:lokkhi": "node scripts/build-docs.mjs lokkhi"
   },
   "devDependencies": {
     "drizzle-orm": "^0.45.4"

@@ -1,0 +1,29 @@
+{
+  "name": "lokkhi-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "docs:openapi": "tsx src/scripts/export-openapi.ts"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.0.0",
+    "@fastify/swagger-ui": "^6.0.0",
+    "@ganesh/db": "0.0.0",
+    "@ganesh/server": "0.0.0",
+    "@ganesh/shared": "0.0.0",
+    "dotenv": "^18.0.9",
+    "fastify": "^5.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.3",
+    "openapi-types": "^12.1.3"
+  }
+}

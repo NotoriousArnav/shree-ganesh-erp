@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   requireMerchant,
   requirePermission,
-} from "../http/auth-guard.js";
+} from "@ganesh/server/http/auth-guard";
 import { getStorage, isStorageConfigured, storageInfo } from "../storage/index.js";
 
 const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024;

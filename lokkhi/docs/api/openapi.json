@@ -1,0 +1,926 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Lokkhi invoices API",
+    "version": "0.1.0",
+    "description": "Sales and purchase invoices for the Shree Ganesh ERP suite.\n\nInvoice lines are self-contained snapshots. Mushak is an optional\nsuggestion source: a line, an invoice, and the issue action never fail\nbecause a catalogue item is missing, archived or deleted.\n\nAll routes are tenant-scoped by the signed-in session. The merchant id is\nnever read from the request.",
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Invoices",
+      "description": "Sales and purchase invoices"
+    },
+    {
+      "name": "Suggestions",
+      "description": "Optional Mushak catalogue lookup"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "LineStatus": {
+        "type": "string",
+        "enum": [
+          "linked",
+          "missing",
+          "archived"
+        ],
+        "description": "Derived at read time. `missing` means the line was never linked or the Mushak product was deleted; `archived` means the product is archived. Neither ever blocks an invoice."
+      },
+      "StockSyncState": {
+        "type": "string",
+        "enum": [
+          "not_applicable",
+          "synced",
+          "failed"
+        ]
+      },
+      "InvoiceLineInput": {
+        "type": "object",
+        "required": [
+          "itemName",
+          "quantity",
+          "unitPrice"
+        ],
+        "properties": {
+          "catalogueItemId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Optional Mushak link. Omit for a manual item."
+          },
+          "itemName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "sku": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
+          "hsnCode": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "unit": {
+            "type": "string",
+            "default": "pcs"
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0.001
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "discount": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Absolute discount in currency, applied before tax."
+          },
+          "taxRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 0,
+            "description": "One combined tax rate for the line."
+          }
+        }
+      },
+      "InvoiceLine": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/InvoiceLineInput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "invoiceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "position": {
+                "type": "integer"
+              },
+              "lineSubtotal": {
+                "type": "number"
+              },
+              "lineTaxable": {
+                "type": "number"
+              },
+              "lineTax": {
+                "type": "number"
+              },
+              "lineTotal": {
+                "type": "number"
+              },
+              "stockMovementId": {
+                "type": "string",
+                "format": "uuid",
+                "nullable": true
+              },
+              "stockSyncState": {
+                "$ref": "#/components/schemas/StockSyncState"
+              },
+              "stockSyncNote": {
+                "type": "string",
+                "nullable": true
+              },
+              "lineStatus": {
+                "$ref": "#/components/schemas/LineStatus"
+              },
+              "catalogueItem": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "stockQty": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "InvoiceInput": {
+        "type": "object",
+        "required": [
+          "partyName"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "purchase"
+            ],
+            "default": "sale"
+          },
+          "invoiceDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Defaults to today on the server."
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "partyName": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "partyPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "partyGstin": {
+            "type": "string",
+            "nullable": true
+          },
+          "partyAddress": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineInput"
+            }
+          }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "purchase"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "issued",
+              "void"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "nullable": true,
+            "example": "SALE/2026-27/0001",
+            "description": "Null until the invoice is issued."
+          },
+          "financialYear": {
+            "type": "string",
+            "nullable": true,
+            "example": "2026-27"
+          },
+          "invoiceDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "partyName": {
+            "type": "string"
+          },
+          "partyPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "partyGstin": {
+            "type": "string",
+            "nullable": true
+          },
+          "partyAddress": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "currency": {
+            "type": "string",
+            "example": "INR"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "subtotal": {
+            "type": "number"
+          },
+          "discountTotal": {
+            "type": "number"
+          },
+          "taxTotal": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "voidedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLine"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/merchant/invoices": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "List invoices",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sale",
+                "purchase"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "issued",
+                "void"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Matches invoice number or party name"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of invoices with per-invoice manual-line counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/Invoice"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "manualItemCount": {
+                                "type": "integer"
+                              },
+                              "stockFailedCount": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Create a draft invoice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Not signed in"
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/{id}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Get one invoice with derived line hints",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Update a draft",
+        "description": "Replaces all lines when `lines` is supplied. Totals are always recomputed on the server. Issued and void invoices cannot be edited.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Not a merchant account"
+          },
+          "404": {
+            "description": "Invoice not found"
+          },
+          "409": {
+            "description": "The action is not valid in the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Delete a draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Only drafts can be deleted"
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/{id}/issue": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Issue an invoice",
+        "description": "Assigns the next number for the shop, kind and financial year, then attempts Mushak stock movements best-effort. Stock failures are recorded per line and never block issuance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Not a merchant account"
+          },
+          "404": {
+            "description": "Invoice not found"
+          },
+          "409": {
+            "description": "The action is not valid in the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/{id}/void": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Void an issued invoice",
+        "description": "Marks the invoice void and creates compensating stock movements for lines whose stock was applied. History is never deleted.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Not a merchant account"
+          },
+          "404": {
+            "description": "Invoice not found"
+          },
+          "409": {
+            "description": "The action is not valid in the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/{id}/lines/{lineId}/retry-stock": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Retry a line's Mushak stock update",
+        "description": "Idempotent: a line that is already synced is left untouched. Failures are recorded on the line again.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "lineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Not a merchant account"
+          },
+          "404": {
+            "description": "Invoice not found"
+          },
+          "409": {
+            "description": "The action is not valid in the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/{id}/lines/{lineId}/add-to-mushak": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Create a Mushak item from an invoice line",
+        "description": "Creates the catalogue definition and an empty stock row, then links the line. The invoice snapshot, including its printed totals, is never rewritten.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "lineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "sku": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "hsnCode": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "taxRate": {
+                    "type": "number"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "categoryId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created and linked"
+          },
+          "409": {
+            "description": "The line is already linked, or the SKU is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merchant/invoices/suggestions": {
+      "get": {
+        "tags": [
+          "Suggestions"
+        ],
+        "summary": "Search Mushak catalogue items",
+        "description": "Optional convenience lookup. Always safe to ignore: manual lines are equivalent.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to ten active catalogue matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "sku": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "hsnCode": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "unit": {
+                        "type": "string"
+                      },
+                      "taxRate": {
+                        "type": "number"
+                      },
+                      "purchasePrice": {
+                        "type": "number"
+                      },
+                      "sellingPrice": {
+                        "type": "number"
+                      },
+                      "stockQty": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,8 +4,8 @@ import { admin, phoneNumber } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements } from "better-auth/plugins/admin/access";
 
-import { db } from "./db.js";
-import * as schema from "./db/schema.js";
+import { db } from "@ganesh/db";
+import * as schema from "@ganesh/db/schema";
 import { buildAuthTrustedOrigins } from "./http/origins.js";
 import { getMailer } from "./mail/index.js";
 import { escapeHtml } from "./mail/mailer.js";
@@ -21,6 +21,12 @@ import { escapeHtml } from "./mail/mailer.js";
  * Roles are stored on users.role and are normally changed directly in the
  * database (Drizzle Studio).
  */
+/**
+ * Product name used in outgoing mail. Set APP_NAME in each app's environment so
+ * a shared auth service sends "Lokkhi" mail from Lokkhi and "Mushak" from Mushak.
+ */
+const appName = process.env.APP_NAME ?? "Mushak";
+
 const ac = createAccessControl(defaultStatements);
 
 const superAdminRole = ac.newRole({
@@ -76,7 +82,7 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }) => {
       await getMailer().send({
         to: user.email,
-        subject: "Reset your Mushak password",
+        subject: `Reset your ${appName} password`,
         text: [
           `Hi ${user.name},`,
           "",
@@ -98,7 +104,7 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       await getMailer().send({
         to: user.email,
-        subject: "Verify your Mushak email",
+        subject: `Verify your ${appName} email`,
         text: [
           `Hi ${user.name},`,
           "",

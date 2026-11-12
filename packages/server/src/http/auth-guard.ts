@@ -3,13 +3,13 @@ import { fromNodeHeaders } from "better-auth/node";
 import { eq } from "drizzle-orm";
 
 import { auth } from "../auth.js";
-import { db } from "../db.js";
+import { db } from "@ganesh/db";
 import {
   staffPermissionValues,
   users,
   type StaffPermission,
   type UserRole,
-} from "../db/schema.js";
+} from "@ganesh/db/schema";
 
 /** Every permission, in the order the UI shows them. */
 export const allStaffPermissions: StaffPermission[] = [...staffPermissionValues];

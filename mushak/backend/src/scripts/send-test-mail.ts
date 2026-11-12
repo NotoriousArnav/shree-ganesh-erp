@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { getMailer } from "../mail/index.js";
+import { getMailer } from "@ganesh/server/mail";
 
 const to = process.argv[2] ?? "test@mushak.local";
 const mailer = getMailer();

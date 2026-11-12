@@ -5,12 +5,12 @@ import swaggerUi from "@fastify/swagger-ui";
 import { sql } from "drizzle-orm";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-import { client, db } from "./db.js";
-import { closeMailer } from "./mail/index.js";
+import { client, db } from "@ganesh/db";
+import { closeMailer } from "@ganesh/server/mail";
 import { createMcpServer } from "./mcp.js";
 import { openapiSpec } from "./openapi.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
-import { registerAuthRoutes } from "./routes/auth-routes.js";
+import { registerAuthRoutes } from "@ganesh/server/routes/auth-routes";
 import { registerMerchantRoutes } from "./routes/merchant-routes.js";
 import { registerStaffRoutes } from "./routes/staff-routes.js";
 import { registerStorageRoutes } from "./routes/storage-routes.js";

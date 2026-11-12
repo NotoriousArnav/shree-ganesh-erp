@@ -2,8 +2,8 @@ import "dotenv/config";
 import { parseArgs } from "node:util";
 import { eq } from "drizzle-orm";
 
-import { db, client } from "../db.js";
-import { users } from "../db/schema.js";
+import { db, client } from "@ganesh/db";
+import { users } from "@ganesh/db/schema";
 
 /**
  * Resets a password without sending mail.
@@ -36,7 +36,7 @@ if (password.length < 8 || password.length > 128) {
   process.exit(1);
 }
 
-const { auth } = await import("../auth.js");
+const { auth } = await import("@ganesh/server/auth");
 const ctx = await auth.$context;
 
 const found = await db

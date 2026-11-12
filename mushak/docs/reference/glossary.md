@@ -97,8 +97,8 @@ data still comes from the server.
 **Reorder level** — The low-stock threshold stored on the inventory row. See
 *low stock*.
 
-**Report** — A printable shop summary for a selectable date range. Opened from
-the Dashboard and saved as a PDF through the browser's print dialog.
+**Report** — A printable and downloadable shop summary for a selectable date
+range. Opened from the Dashboard; supports print/PDF, CSV ZIP, XLSX and JSON.
 
 **Role** — `super_admin`, `dev`, `merchant` or `staff`. Constrained in the
 database.

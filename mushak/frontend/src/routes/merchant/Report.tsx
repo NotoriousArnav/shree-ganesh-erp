@@ -8,6 +8,7 @@ import { api, errorMessage } from "@/lib/api";
 import { dateTime, money, movementLabels, qty } from "@/lib/format";
 import {
   downloadReportCsv,
+  downloadReportJson,
   downloadReportXlsx,
 } from "@/lib/report-export";
 import {
@@ -95,11 +96,11 @@ export default function Report() {
                 variant="outline"
                 onClick={() => data && downloadReportCsv(data)}
                 disabled={!data}
-                aria-label="Download report as CSV"
-                title="Download the report as CSV"
+                aria-label="Download CSV files as a ZIP"
+                title="Download one CSV per report section, inside a ZIP"
               >
                 <DownloadIcon />
-                CSV
+                CSV ZIP
               </Button>
               <Button
                 variant="outline"
@@ -110,6 +111,16 @@ export default function Report() {
               >
                 <DownloadIcon />
                 XLSX
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => data && downloadReportJson(data)}
+                disabled={!data}
+                aria-label="Download report as JSON"
+                title="Download the report data as JSON"
+              >
+                <DownloadIcon />
+                JSON
               </Button>
               <Button onClick={() => window.print()} disabled={!data}>
                 <PrinterIcon />

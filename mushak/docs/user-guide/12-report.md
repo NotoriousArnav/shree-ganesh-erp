@@ -3,7 +3,8 @@
 **Report** produces a printable or downloadable summary of the shop for a date
 range. The page you see is the preview — there is no separate print dialog
 window. Choose **Print** and use the browser's print dialog to send it to a
-printer or choose **Save as PDF**, or download the same data as CSV or XLSX.
+printer or choose **Save as PDF**, or download the same data as CSV files,
+XLSX or JSON.
 
 Open it from the **Report** button in the Dashboard header, or go to
 `/app/report` directly.
@@ -59,23 +60,27 @@ more than one page.
 The browser sets the document title to `<shop> report — <range>`, which becomes
 the default PDF filename.
 
-## Downloading CSV and XLSX
+## Downloading CSV, XLSX and JSON
 
-The same report can be downloaded as a spreadsheet:
+The same report can be downloaded in three formats:
 
-- **CSV** — one UTF-8 file with a section for Summary, Categories, Needs
-  reordering, Out of stock, Top stock value and Movements. Values are separated
-  by a blank line. Currency columns are plain numbers, with the currency code in
-  the heading (for example `Retail (INR)`). Movement timestamps include an ISO
-  column for re-importing.
+- **CSV ZIP** — a ZIP archive containing one UTF-8 CSV per section:
+  `01-summary.csv`, `02-categories.csv`, `03-needs-reordering.csv`,
+  `04-out-of-stock.csv`, `05-top-stock-value.csv` and `06-movements.csv`.
+  Currency columns are plain numbers, with the currency code in the heading
+  (for example `Retail (INR)`). Movement rows include an ISO timestamp column
+  for re-importing.
 - **XLSX** — an Excel workbook with one worksheet per section. Header rows are
   bold and frozen, and column widths are sized to the content.
+- **JSON** — the report response exactly as the page received it, pretty-printed
+  with the range, summary, stock-health, valuation, low-stock, out-of-stock,
+  top-value and movement fields. Useful for scripts or for keeping a raw copy.
 
-Both downloads use the currently loaded report and range, and are named
-`mushak-report-<from>-to-<to>.csv` or `.xlsx`. The movement sheet is capped at
-1,000 rows, exactly like the on-screen report; when the range contains more, the
-Summary sheet and the screen both say so. Narrow the range to export the full
-list.
+The downloads use the currently loaded report and range, and are named
+`mushak-report-<from>-to-<to>.csv.zip`, `.xlsx` or `.json`. The movement sheet
+is capped at 1,000 rows, exactly like the on-screen report; when the range
+contains more, the Summary section and the screen both say so. Narrow the range
+to export the full list.
 
 The files are built in the browser from the report response, so there is no
 server-side export job to wait for. Stock totals and valuation are the snapshot

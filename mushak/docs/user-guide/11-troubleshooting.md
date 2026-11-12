@@ -22,26 +22,23 @@ reactivate it. Resetting the password does not reactivate an account.
 
 ### “Invalid origin” when signing in
 
-The backend only accepts sign-in requests from origins it trusts. The browser's
-address bar decides the origin, so these are different to the backend:
+The backend only accepts sign-in requests from origins it trusts. Development
+trusts every origin, so this error only appears when `NODE_ENV=production`.
 
-- `http://localhost:5173` — trusted by default;
-- `http://127.0.0.1:5173` — trusted in development since it is the same
-  loopback interface;
-- `http://<laptop-lan-ip>:5173` — trusted in development;
-- `http://<some-other-host>:5173` — **not** trusted.
-
-Open the frontend at `localhost` or the machine's LAN address, or add the exact
-origin (scheme, host and port) to `TRUSTED_ORIGINS` in the backend environment
-and restart it:
+- `http://localhost:5173`, `http://127.0.0.1:5173`, a LAN address, an mDNS name
+  such as `http://laptop.local:5173`, or a tunnel — all accepted in development.
+- In production, add the exact origin (scheme, host and port) to
+  `TRUSTED_ORIGINS` and restart the backend:
 
 ```dotenv
-TRUSTED_ORIGINS=http://mushak.local:5173,https://shop.example.in
+TRUSTED_ORIGINS=https://shop.example.in,https://mushak.example.in
 ```
 
-`NODE_ENV=production` turns off automatic LAN and loopback origins, so a deployed
-frontend must be listed explicitly. The backend log names the rejected origin and
-prints the trusted list.
+- To accept every origin in production, set `TRUSTED_ORIGINS=*`. This turns
+  Better Auth's origin and redirect checks off; the session cookie still uses
+  `SameSite=Lax`. Prefer listing the real origins.
+
+The backend log names the rejected origin and prints the trusted list.
 
 ### The page keeps returning to sign-in
 

@@ -126,12 +126,11 @@ by the shop owner with `POST /api/merchant/staff/{id}/password`.
 
 - The cookie is http-only and sent automatically by the browser.
 - The backend trusts `FRONTEND_URL`, `BETTER_AUTH_URL` and anything in
-  `TRUSTED_ORIGINS`. In development it also trusts loopback
-  (`localhost`, `127.0.0.1`, `[::1]`) and the machine's LAN IPv4 addresses on
-  the frontend port.
-- A request from an untrusted browser origin is rejected by Better Auth with
-  `403 INVALID_ORIGIN`. Add the exact origin to `TRUSTED_ORIGINS`; production
-  does not trust LAN or loopback addresses automatically.
+  `TRUSTED_ORIGINS`. Development trusts every origin, so any host, port or
+  tunnel works while running the dev server.
+- `NODE_ENV=production` enforces the list. A request from an untrusted origin
+  fails with `403 INVALID_ORIGIN`; add the exact origin, or set
+  `TRUSTED_ORIGINS=*` to accept every origin.
 - Changing `BETTER_AUTH_SECRET` invalidates all sessions.
 
 ## Not documented here

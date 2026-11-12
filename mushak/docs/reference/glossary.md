@@ -125,7 +125,8 @@ cost and retail.
 
 **Trusted origin** — A frontend origin allowed to call the auth API and upload to
 the bucket. Configured with `FRONTEND_URL`, `BETTER_AUTH_URL` and
-`TRUSTED_ORIGINS`.
+`TRUSTED_ORIGINS`. Development accepts every origin; production enforces the
+list unless `TRUSTED_ORIGINS=*`.
 
 ## U
 

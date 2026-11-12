@@ -224,7 +224,7 @@ Production checklist:
 - `NODE_ENV=production`;
 - a strong `BETTER_AUTH_SECRET` that is never rotated casually;
 - `BETTER_AUTH_URL` and `FRONTEND_URL` set to the public origins;
-- `TRUSTED_ORIGINS` for every extra frontend origin;
+- `TRUSTED_ORIGINS` for every extra frontend origin, or `*` to accept all;
 - TLS at the proxy;
 - real Postgres and object storage, with backups;
 - `MAIL_DRIVER=smtp` with a verified sending domain before public password

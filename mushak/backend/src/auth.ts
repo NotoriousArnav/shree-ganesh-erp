@@ -6,7 +6,7 @@ import { defaultStatements } from "better-auth/plugins/admin/access";
 
 import { db } from "./db.js";
 import * as schema from "./db/schema.js";
-import { buildTrustedOrigins } from "./http/origins.js";
+import { buildAuthTrustedOrigins } from "./http/origins.js";
 import { getMailer } from "./mail/index.js";
 import { escapeHtml } from "./mail/mailer.js";
 
@@ -58,7 +58,7 @@ const staffRole = ac.newRole({ user: [], session: [] });
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:8080",
   secret: process.env.BETTER_AUTH_SECRET,
-  trustedOrigins: buildTrustedOrigins(),
+  trustedOrigins: buildAuthTrustedOrigins(),
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

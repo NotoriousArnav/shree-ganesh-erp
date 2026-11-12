@@ -38,11 +38,14 @@ It reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `mushak/backend/.env`.
 ### Trying it on a phone
 
 The Vite dev server listens on `0.0.0.0`, so a phone on the same Wi-Fi can open
-`http://<laptop-lan-ip>:5173`. Auth trusts the laptop's LAN addresses
-automatically in development, so signing in works without extra config.
+`http://<laptop-lan-ip>:5173`. While `NODE_ENV` is not `production`, the backend
+accepts sign-in requests from any origin, so phones, mDNS names and tunnels work
+without extra config.
 
-If the frontend runs on another hostname or port, add it to `TRUSTED_ORIGINS`
-(comma-separated) in `mushak/backend/.env` and restart the backend.
+A deployed frontend must be listed in `TRUSTED_ORIGINS` (comma-separated) in the
+backend environment; production only accepts the configured origins. Set
+`TRUSTED_ORIGINS=*` to accept every origin, at the cost of Better Auth's origin
+and redirect checks.
 
 ## Database
 

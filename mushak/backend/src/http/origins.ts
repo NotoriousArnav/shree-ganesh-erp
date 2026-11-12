@@ -42,3 +42,32 @@ export function buildTrustedOrigins(): string[] {
 
   return [...origins];
 }
+
+/**
+ * Origins the auth layer accepts.
+ *
+ * Development trusts every origin, so a phone on the LAN, an mDNS name such as
+ * `http://laptop.local:5173`, a tunnel, or a container hostname never trips
+ * "Invalid origin". Production keeps the explicit list built by
+ * `buildTrustedOrigins()` unless `TRUSTED_ORIGINS` contains `*`.
+ *
+ * The storage CORS policy keeps using `buildTrustedOrigins()`: S3 needs concrete
+ * origins, and presigned uploads do not send credentials.
+ */
+export function buildAuthTrustedOrigins(): string[] {
+  const origins = buildTrustedOrigins();
+  const production = process.env.NODE_ENV === "production";
+  const trustAll = !production || origins.includes("*");
+
+  if (!trustAll) return origins;
+
+  if (production) {
+    console.warn(
+      "[auth] TRUSTED_ORIGINS=* accepts requests from every origin. " +
+        "Better Auth's origin and redirect checks are effectively off; " +
+        "session cookies still use SameSite=Lax.",
+    );
+  }
+
+  return ["*", ...origins.filter((origin) => origin !== "*")];
+}

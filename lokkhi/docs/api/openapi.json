@@ -85,7 +85,8 @@
           },
           "quantity": {
             "type": "number",
-            "minimum": 0.001
+            "minimum": 0.001,
+            "description": "Counted units (pcs, box, packet, dozen) require whole numbers; measured units (kg, g, litre, ml) may be fractional."
           },
           "unitPrice": {
             "type": "number",
@@ -205,7 +206,8 @@
           },
           "partyPhone": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Optional. When present it must match ^\\+?[\\d\\s()-]{6,32}$."
           },
           "partyGstin": {
             "type": "string",
@@ -278,7 +280,8 @@
           },
           "partyPhone": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Optional. When present it must match ^\\+?[\\d\\s()-]{6,32}$."
           },
           "partyGstin": {
             "type": "string",

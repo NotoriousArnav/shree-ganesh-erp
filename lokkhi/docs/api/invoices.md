@@ -39,6 +39,14 @@ Content-Type: application/json
 The first line is a manual item: no `catalogueItemId`, no complaint. The second
 is linked to Mushak and copies its snapshot from the request.
 
+`partyName` is required; `partyPhone` is optional. When supplied, the phone must
+look like a phone number (`^\\+?[\\d\\s()-]{6,32}$`).
+
+Quantity depends on the unit. Counted units (`pcs`, `box`, `packet`, `dozen`)
+must be whole numbers; measured units (`kg`, `g`, `litre`, `ml`) may be
+fractional. A fractional counted quantity returns `400` with a message such as
+`lines.0.quantity: Use a whole number for pcs`.
+
 Response `201`:
 
 ```json

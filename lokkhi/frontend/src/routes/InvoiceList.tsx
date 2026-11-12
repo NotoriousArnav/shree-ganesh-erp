@@ -89,7 +89,7 @@ export default function InvoiceList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Invoices</h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-muted-foreground">
             Sales and purchase invoices, issued or in progress.
           </p>
         </div>
@@ -154,9 +154,9 @@ export default function InvoiceList() {
       ) : null}
 
       {items.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+            <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Number</th>
                 <th className="px-4 py-2.5 font-medium">Date</th>
@@ -171,27 +171,34 @@ export default function InvoiceList() {
                 <tr
                   key={invoice.id}
                   onClick={() => navigate(`/invoices/${invoice.id}`)}
-                  className="cursor-pointer border-t border-neutral-100 hover:bg-neutral-50"
+                  className="cursor-pointer border-t border-border/60 hover:bg-accent/60"
                 >
                   <td className="px-4 py-3 font-medium">
                     {invoice.number ?? (
-                      <span className="text-neutral-400">Draft</span>
+                      <span className="text-muted-foreground/70">Draft</span>
                     )}
-                    <span className="ml-2 text-xs font-normal text-neutral-400">
+                    <span className="ml-2 text-xs font-normal text-muted-foreground/70">
                       {invoice.kind === "purchase" ? "Purchase" : "Sale"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-600">
+                  <td className="px-4 py-3 text-muted-foreground">
                     {dateLabel(invoice.invoiceDate)}
                   </td>
-                  <td className="px-4 py-3">{invoice.partyName}</td>
+                  <td className="px-4 py-3">
+                    <span className="block">{invoice.partyName}</span>
+                    {invoice.partyPhone ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {invoice.partyPhone}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {money(invoice.total, invoice.currency)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {invoice.manualItemCount > 0 ? (
-                        <span className="text-xs text-neutral-400">
+                        <span className="text-xs text-muted-foreground/80">
                           {invoice.manualItemCount} manual{" "}
                           {invoice.manualItemCount === 1 ? "item" : "items"}
                         </span>
@@ -216,7 +223,7 @@ export default function InvoiceList() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-neutral-400">Loading invoices…</p>
+        <p className="text-sm text-muted-foreground/80">Loading invoices…</p>
       ) : null}
     </div>
   );

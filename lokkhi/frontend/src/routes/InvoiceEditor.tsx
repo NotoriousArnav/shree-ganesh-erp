@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { invoiceLineTotals, invoiceTotals } from "@ganesh/shared";
+import {
+  invoiceLineTotals,
+  invoiceTotals,
+  quantityError,
+  unitStep,
+} from "@ganesh/shared";
 
 import {
   Badge,
@@ -209,8 +214,12 @@ export default function InvoiceEditor() {
     for (const line of lines) {
       if (!line.itemName.trim() && !Number(line.unitPrice)) continue;
       if (!line.itemName.trim()) return "Every used line needs an item name.";
-      if (!(Number(line.quantity) > 0)) {
-        return `Quantity for “${line.itemName}” must be more than zero.`;
+      const quantityMessage = quantityError(
+        line.unit,
+        Number(line.quantity),
+      );
+      if (quantityMessage) {
+        return `“${line.itemName}”: ${quantityMessage}.`;
       }
 
       payloadLines.push({
@@ -281,7 +290,7 @@ export default function InvoiceEditor() {
   }
 
   if (loading) {
-    return <p className="text-sm text-neutral-400">Loading invoice…</p>;
+    return <p className="text-sm text-muted-foreground/70">Loading invoice…</p>;
   }
 
   return (
@@ -291,7 +300,7 @@ export default function InvoiceEditor() {
           <h1 className="text-xl font-semibold tracking-tight">
             {id ? "Edit draft" : "New invoice"}
           </h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-muted-foreground">
             Mushak suggestions are optional. Type anything if the product is not
             in Mushak.
           </p>
@@ -315,7 +324,7 @@ export default function InvoiceEditor() {
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-      <div className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Kind">
           <Select
             value={kind}
@@ -342,15 +351,20 @@ export default function InvoiceEditor() {
           />
         </Field>
 
-        <Field label={kind === "sale" ? "Customer" : "Supplier"}>
+        <Field
+          label={kind === "sale" ? "Customer" : "Supplier"}
+          required
+          hint="Name is required; phone is optional"
+        >
           <Input
             value={partyName}
             onChange={(event) => setPartyName(event.target.value)}
             placeholder={kind === "sale" ? "Walk-in customer" : "Supplier name"}
+            required
           />
         </Field>
 
-        <Field label="Phone" hint="Optional">
+        <Field label="Phone" hint="Optional, shown next to the name">
           <Input
             value={partyPhone}
             onChange={(event) => setPartyPhone(event.target.value)}
@@ -375,10 +389,10 @@ export default function InvoiceEditor() {
         </Field>
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white">
+      <div className="rounded-2xl border border-border bg-card">
         <div>
           <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+            <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-2.5 font-medium">Item</th>
                 <th className="w-24 px-2 py-2.5 font-medium">Qty</th>
@@ -402,7 +416,7 @@ export default function InvoiceEditor() {
                   suggestFor === line.key && activeName.trim().length >= 2;
 
                 return (
-                  <tr key={line.key} className="border-t border-neutral-100">
+                  <tr key={line.key} className="border-t border-border/60">
                     <td className="px-3 py-2 align-top">
                       <div className="relative">
                         <Input
@@ -423,17 +437,17 @@ export default function InvoiceEditor() {
                           autoComplete="off"
                         />
                         {line.catalogueItemId ? (
-                          <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-600">
+                          <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                             Linked to Mushak
                           </span>
                         ) : line.itemName.trim() ? (
-                          <span className="mt-1 block text-[11px] text-neutral-400">
+                          <span className="mt-1 block text-[11px] text-muted-foreground/70">
                             Manual item — saved with this invoice only
                           </span>
                         ) : null}
 
                         {showSuggestions ? (
-                          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+                          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
                             {suggestions.map((suggestion) => (
                               <button
                                 key={suggestion.id}
@@ -442,17 +456,17 @@ export default function InvoiceEditor() {
                                   event.preventDefault();
                                   pickSuggestion(line.key, suggestion);
                                 }}
-                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/60"
                               >
                                 <span>
                                   <span className="font-medium">
                                     {suggestion.name}
                                   </span>
-                                  <span className="ml-2 text-xs text-neutral-400">
+                                  <span className="ml-2 text-xs text-muted-foreground/70">
                                     {suggestion.sku ?? "no SKU"}
                                   </span>
                                 </span>
-                                <span className="shrink-0 text-xs text-neutral-500">
+                                <span className="shrink-0 text-xs text-muted-foreground">
                                   {money(
                                     kind === "sale"
                                       ? suggestion.sellingPrice
@@ -464,13 +478,13 @@ export default function InvoiceEditor() {
                             ))}
 
                             {suggestLoading ? (
-                              <p className="px-3 py-2 text-xs text-neutral-400">
+                              <p className="px-3 py-2 text-xs text-muted-foreground/70">
                                 Searching Mushak…
                               </p>
                             ) : null}
 
                             {!suggestLoading && suggestions.length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-neutral-500">
+                              <div className="px-3 py-2 text-xs text-muted-foreground">
                                 {suggestFailed ? (
                                   "Mushak suggestions unavailable — you can still add this item."
                                 ) : (
@@ -482,7 +496,7 @@ export default function InvoiceEditor() {
                                         event.preventDefault();
                                         setSuggestFor(null);
                                       }}
-                                      className="mt-1 text-neutral-600 underline decoration-neutral-300 underline-offset-2 hover:text-neutral-900"
+                                      className="mt-1 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
                                     >
                                       Use “{activeName.trim()}” as a manual item
                                     </button>
@@ -498,9 +512,19 @@ export default function InvoiceEditor() {
                     <td className="px-2 py-2 align-top">
                       <Input
                         type="number"
-                        min="0"
-                        step="0.001"
+                        min={unitStep(line.unit)}
+                        step={unitStep(line.unit)}
+                        inputMode={
+                          unitStep(line.unit) === 1 ? "numeric" : "decimal"
+                        }
                         value={line.quantity}
+                        aria-invalid={Boolean(
+                          quantityError(line.unit, Number(line.quantity)),
+                        )}
+                        title={quantityError(
+                          line.unit,
+                          Number(line.quantity),
+                        ) ?? undefined}
                         onChange={(event) =>
                           updateLine(line.key, { quantity: event.target.value })
                         }
@@ -510,9 +534,16 @@ export default function InvoiceEditor() {
                     <td className="px-2 py-2 align-top">
                       <Select
                         value={line.unit}
-                        onChange={(event) =>
-                          updateLine(line.key, { unit: event.target.value })
-                        }
+                        onChange={(event) => {
+                          const unit = event.target.value;
+                          // Switching to a counted unit rounds off any
+                          // fractional quantity left over from a measured one.
+                          const quantity =
+                            unitStep(unit) === 1
+                              ? String(Math.round(Number(line.quantity) || 0) || 1)
+                              : line.quantity;
+                          updateLine(line.key, { unit, quantity });
+                        }}
                       >
                         {units.map((unit) => (
                           <option key={unit} value={unit}>
@@ -586,7 +617,7 @@ export default function InvoiceEditor() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2">
           <Button
             variant="outline"
             size="sm"
@@ -594,27 +625,31 @@ export default function InvoiceEditor() {
           >
             Add line
           </Button>
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Badge tone="neutral">Tax exclusive</Badge>
             <span>Tax is added on top of the line total.</span>
           </div>
         </div>
       </div>
 
-      <div className="ml-auto w-full max-w-sm space-y-1.5 rounded-2xl border border-neutral-200 bg-white p-4 text-sm">
-        <div className="flex justify-between text-neutral-500">
+      <div className="ml-auto w-full max-w-sm space-y-1.5 rounded-2xl border border-border bg-card p-4 text-sm">
+        <div className="flex justify-between text-muted-foreground">
           <span>Subtotal</span>
           <span className="tabular-nums">{money(totals.subtotal)}</span>
         </div>
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-muted-foreground">
           <span>Discount</span>
-          <span className="tabular-nums">−{money(totals.discountTotal)}</span>
+          <span className="tabular-nums">
+            {totals.discountTotal > 0
+              ? `−${money(totals.discountTotal)}`
+              : money(0)}
+          </span>
         </div>
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-muted-foreground">
           <span>Tax</span>
           <span className="tabular-nums">{money(totals.taxTotal)}</span>
         </div>
-        <div className="flex justify-between border-t border-neutral-200 pt-2 text-base font-semibold">
+        <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
           <span>Total</span>
           <span className="tabular-nums">{money(totals.total)}</span>
         </div>

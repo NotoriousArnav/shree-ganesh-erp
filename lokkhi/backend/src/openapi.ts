@@ -33,7 +33,12 @@ const invoiceLineInput: OpenAPIV3.SchemaObject = {
     sku: { type: "string", nullable: true, maxLength: 64 },
     hsnCode: { type: "string", nullable: true, maxLength: 16 },
     unit: { type: "string", default: "pcs" },
-    quantity: { type: "number", minimum: 0.001 },
+    quantity: {
+      type: "number",
+      minimum: 0.001,
+      description:
+        "Counted units (pcs, box, packet, dozen) require whole numbers; measured units (kg, g, litre, ml) may be fractional.",
+    },
     unitPrice: { type: "number", minimum: 0 },
     discount: {
       type: "number",
@@ -95,7 +100,12 @@ const invoiceInput: OpenAPIV3.SchemaObject = {
     },
     dueDate: { type: "string", format: "date", nullable: true },
     partyName: { type: "string", maxLength: 160 },
-    partyPhone: { type: "string", nullable: true },
+    partyPhone: {
+      type: "string",
+      nullable: true,
+      description:
+        "Optional. When present it must match ^\\+?[\\d\\s()-]{6,32}$.",
+    },
     partyGstin: { type: "string", nullable: true },
     partyAddress: {
       type: "object",
@@ -127,7 +137,12 @@ const invoice: OpenAPIV3.SchemaObject = {
     invoiceDate: { type: "string", format: "date" },
     dueDate: { type: "string", format: "date", nullable: true },
     partyName: { type: "string" },
-    partyPhone: { type: "string", nullable: true },
+    partyPhone: {
+      type: "string",
+      nullable: true,
+      description:
+        "Optional. When present it must match ^\\+?[\\d\\s()-]{6,32}$.",
+    },
     partyGstin: { type: "string", nullable: true },
     partyAddress: {
       type: "object",

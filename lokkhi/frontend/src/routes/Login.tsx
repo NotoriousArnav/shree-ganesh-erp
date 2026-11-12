@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
+import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 
 /** Accepts 9876543210, +919876543210, or a spaced version of either. */
@@ -62,22 +63,25 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="mb-6 space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Lokkhi</h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-muted-foreground">
             Sales and purchase invoices
           </p>
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+          className="space-y-4 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm"
         >
           {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-          <Field label="Email or phone">
+          <Field label="Email or phone" required>
             <Input
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
@@ -87,7 +91,7 @@ export default function Login() {
             />
           </Field>
 
-          <Field label="Password">
+          <Field label="Password" required>
             <Input
               type="password"
               value={password}
@@ -101,7 +105,7 @@ export default function Login() {
             {busy ? "Signing in…" : "Sign in"}
           </Button>
 
-          <p className="text-center text-xs text-neutral-400">
+          <p className="text-center text-xs text-muted-foreground/80">
             Uses the same account as Mushak.
           </p>
         </form>

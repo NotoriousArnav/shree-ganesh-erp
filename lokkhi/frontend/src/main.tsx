@@ -7,7 +7,10 @@ import InvoiceDetail from "@/routes/InvoiceDetail";
 import InvoiceEditor from "@/routes/InvoiceEditor";
 import InvoiceList from "@/routes/InvoiceList";
 import Login from "@/routes/Login";
+import { startThemeWatcher } from "@/lib/theme";
 import "./index.css";
+
+startThemeWatcher();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

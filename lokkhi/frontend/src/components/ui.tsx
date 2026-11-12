@@ -7,9 +7,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 
-function cx(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(" ");
-}
+import { cn } from "@/lib/utils";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "outline" | "ghost" | "danger";
@@ -24,15 +22,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={cx(
+        className={cn(
           "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
           size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm",
           variant === "primary" &&
-            "bg-neutral-900 text-white hover:bg-neutral-700",
+            "bg-primary text-primary-foreground hover:opacity-90",
           variant === "outline" &&
-            "border border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50",
-          variant === "ghost" && "text-neutral-600 hover:bg-neutral-100",
-          variant === "danger" && "bg-red-600 text-white hover:bg-red-500",
+            "border border-border bg-card text-foreground hover:bg-accent",
+          variant === "ghost" &&
+            "text-muted-foreground hover:bg-accent hover:text-foreground",
+          variant === "danger" &&
+            "bg-destructive text-destructive-foreground hover:opacity-90",
           className,
         )}
         {...props}
@@ -48,8 +48,8 @@ export const Input = forwardRef<
   return (
     <input
       ref={ref}
-      className={cx(
-        "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200",
+      className={cn(
+        "w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:ring-2 focus:ring-ring/25",
         className,
       )}
       {...props}
@@ -64,8 +64,8 @@ export const Select = forwardRef<
   return (
     <select
       ref={ref}
-      className={cx(
-        "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200",
+      className={cn(
+        "w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/25",
         className,
       )}
       {...props}
@@ -80,8 +80,8 @@ export const Textarea = forwardRef<
   return (
     <textarea
       ref={ref}
-      className={cx(
-        "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200",
+      className={cn(
+        "w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:ring-2 focus:ring-ring/25",
         className,
       )}
       {...props}
@@ -92,20 +92,35 @@ export const Textarea = forwardRef<
 export function Field({
   label,
   hint,
+  required,
   children,
   className,
 }: {
   label: string;
   hint?: string;
+  required?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <label className={cx("block space-y-1", className)}>
-      <span className="text-xs font-medium text-neutral-600">{label}</span>
-      {children}
-      {hint ? <span className="block text-xs text-neutral-400">{hint}</span> : null}
-    </label>
+    <div className={cn("block space-y-1", className)}>
+      {/* The hint sits outside the label so it does not become part of the
+          field's accessible name. */}
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+          {required ? (
+            <span className="ml-0.5 text-destructive" aria-hidden="true">
+              *
+            </span>
+          ) : null}
+        </span>
+        {children}
+      </label>
+      {hint ? (
+        <span className="block text-xs text-muted-foreground/80">{hint}</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -118,13 +133,17 @@ export function Badge({
 }) {
   return (
     <span
-      className={cx(
+      className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-        tone === "neutral" && "bg-neutral-100 text-neutral-600",
-        tone === "green" && "bg-emerald-50 text-emerald-700",
-        tone === "amber" && "bg-amber-50 text-amber-700",
-        tone === "red" && "bg-red-50 text-red-700",
-        tone === "blue" && "bg-blue-50 text-blue-700",
+        tone === "neutral" && "bg-muted text-muted-foreground",
+        tone === "green" &&
+          "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+        tone === "amber" &&
+          "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+        tone === "red" &&
+          "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+        tone === "blue" &&
+          "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
       )}
     >
       {children}
@@ -150,15 +169,15 @@ export function Dialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 bg-black/40"
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl">
         <div className="mb-4 space-y-1">
           <h2 className="text-lg font-semibold">{title}</h2>
           {description ? (
-            <p className="text-sm text-neutral-500">{description}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {children}
@@ -169,7 +188,7 @@ export function Dialog({
 
 export function ErrorNote({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
       {children}
     </p>
   );
@@ -185,9 +204,9 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center">
-      <h3 className="text-sm font-semibold text-neutral-800">{title}</h3>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-neutral-500">
+    <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
         {description}
       </p>
       {action ? <div className="mt-4">{action}</div> : null}

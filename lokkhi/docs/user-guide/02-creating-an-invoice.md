@@ -9,14 +9,21 @@ Open **Invoices** and choose **New sale** or **New purchase**.
 - **Kind** — sale or purchase. It decides the labels and the suggested price.
 - **Invoice date** — defaults to today. It also decides the financial year.
 - **Due date** — optional.
-- **Customer / Supplier** — required, free text.
-- **Phone and GSTIN** — optional, printed when present.
+- **Customer / Supplier** — required, free text. The `*` marks it.
+- **Phone** — optional. Shown next to the party name on the invoice and in the
+  invoice list when filled in.
+- **GSTIN** — optional, printed when present.
 - **Notes** — optional, printed under the lines.
 
 ## Lines
 
 Each line has an item name, quantity, unit, price, discount and tax rate. The
 line total updates as you type, and the invoice totals sit below the table.
+
+Quantity follows the unit. Counted units (`pcs`, `box`, `packet`, `dozen`) accept
+whole numbers only, so `2.5 pcs` is refused with a clear message. Measured units
+(`kg`, `g`, `litre`, `ml`) accept fractions such as `0.75 kg`. The input's step
+changes with the unit, and switching back to a counted unit rounds the value.
 
 To add another line, choose **Add line**. To remove one, press the `×` on the
 right.

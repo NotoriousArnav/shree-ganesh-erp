@@ -6,6 +6,12 @@ but is inactive. Shown as a quiet hint; nothing is blocked.
 **Catalogue item** — a product definition in Mushak: name, SKU, HSN, unit, tax
 rate and prices. Stock lives in a separate inventory row.
 
+**Counted unit** — a unit you count rather than weigh: `pcs`, `box`, `packet`,
+`dozen`. Quantities must be whole numbers.
+
+**Measured unit** — a unit you weigh or pour: `kg`, `g`, `litre`, `ml`.
+Fractional quantities are allowed.
+
 **Draft** — an unnumbered, editable invoice. It has no stock effect.
 
 **Financial year** — April to March, rendered as `2026-27`. Part of the invoice
@@ -18,6 +24,9 @@ stock movement direction.
 
 **Line status** — derived from the Mushak link: `linked`, `missing` or
 `archived`.
+
+**Party** — the customer on a sale or the supplier on a purchase. Name is
+required; phone and GSTIN are optional snapshots on the invoice.
 
 **Manual item** — an invoice line with no Mushak link. Fully supported, never an
 error.

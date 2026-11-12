@@ -3,13 +3,14 @@ import { Link, NavLink, useNavigate } from "react-router";
 
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui";
+import ThemeToggle from "@/components/theme-toggle";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
     "rounded-lg px-3 py-1.5 text-sm transition-colors",
     isActive
-      ? "bg-neutral-900 text-white"
-      : "text-neutral-600 hover:bg-neutral-100",
+      ? "bg-primary text-primary-foreground"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground",
   ].join(" ");
 }
 
@@ -45,7 +46,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (state === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-neutral-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
     );
@@ -55,12 +56,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="print-hide border-b border-neutral-200 bg-white">
+      <header className="print-hide border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-6">
             <Link to="/" className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold tracking-tight">Lokkhi</span>
-              <span className="text-xs text-neutral-400">Invoices</span>
+              <span className="text-lg font-semibold tracking-tight">
+                Lokkhi
+              </span>
+              <span className="text-xs text-muted-foreground">Invoices</span>
             </Link>
             <nav className="flex items-center gap-1">
               <NavLink to="/" end className={navClass}>
@@ -68,16 +71,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
               </NavLink>
               <Link
                 to="/?kind=purchase"
-                className="rounded-lg px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100"
+                className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 Purchases
               </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-neutral-500 sm:inline">
+            <span className="hidden text-xs text-muted-foreground sm:inline">
               {merchantName}
             </span>
+            <ThemeToggle />
             <Button
               variant="outline"
               size="sm"

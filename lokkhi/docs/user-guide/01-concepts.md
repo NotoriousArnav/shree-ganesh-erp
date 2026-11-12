@@ -64,6 +64,31 @@ usual way; if you need a full split, that is a later feature.
 
 ## Parties
 
-Customers and suppliers are **snapshots on the invoice** in v1. You type a name,
-phone and GSTIN. There is no separate address book yet, and renaming a party
-never changes old invoices.
+Customers and suppliers are **snapshots on the invoice** in v1. A name is
+required. Phone and GSTIN are optional; when a phone is present it is shown next
+to the name on the invoice and in the invoice list, so the person answering the
+counter can call without opening the bill.
+
+There is no separate address book yet, and renaming a party never changes old
+invoices.
+
+## Quantity and units
+
+Quantity is stored with three decimals because some units are measured, not
+counted. Lokkhi enforces the difference:
+
+| Unit type | Examples | Quantity |
+| --- | --- | --- |
+| Counted | `pcs`, `box`, `packet`, `dozen` | Whole numbers only |
+| Measured | `kg`, `g`, `litre`, `ml` | Fractions allowed |
+
+So `2 pcs` and `1.5 kg` are both valid, while `2.5 pcs` is rejected in the
+editor and by the API. If you switch a line from `kg` to `pcs`, Lokkhi rounds the
+quantity to a whole number instead of leaving an invalid fraction behind.
+
+## Appearance
+
+The header and the sign-in page have a three-way switch: **Light**, **Dark** and
+**System**. System follows the device setting and updates live when the device
+changes. The choice is remembered per browser and applied before the page paints,
+so there is no white flash when you open a dark-themed app.

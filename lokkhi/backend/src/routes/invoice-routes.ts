@@ -36,6 +36,7 @@ import {
   formatInvoiceNumber,
   invoiceLineTotals,
   invoiceTotals,
+  quantityError,
   roundQuantity,
 } from "@ganesh/shared";
 
@@ -61,17 +62,31 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const money = z.coerce.number().min(0).max(10_000_000);
 const quantity = z.coerce.number().positive().max(10_000_000);
 
-const lineInput = z.object({
-  catalogueItemId: z.uuid().nullish(),
-  itemName: z.string().trim().min(1, "Item name is required").max(200),
-  sku: optionalText(64),
-  hsnCode: optionalText(16),
-  unit: z.string().trim().min(1).max(20).default("pcs"),
-  quantity,
-  unitPrice: money,
-  discount: money.default(0),
-  taxRate: z.coerce.number().min(0).max(100).default(0),
-});
+const lineInput = z
+  .object({
+    catalogueItemId: z.uuid().nullish(),
+    itemName: z.string().trim().min(1, "Item name is required").max(200),
+    sku: optionalText(64),
+    hsnCode: optionalText(16),
+    unit: z.string().trim().min(1).max(20).default("pcs"),
+    quantity,
+    unitPrice: money,
+    discount: money.default(0),
+    taxRate: z.coerce.number().min(0).max(100).default(0),
+  })
+  .superRefine((value, ctx) => {
+    // Counted units must be whole numbers; measured units may be fractional.
+    const message = quantityError(value.unit, value.quantity);
+    if (message) {
+      ctx.addIssue({ code: "custom", path: ["quantity"], message });
+    }
+  });
+
+/** Optional, but when present it must look like a phone number. */
+const phone = optionalText(32).refine(
+  (value) => value == null || /^\+?[\d\s()-]{6,32}$/.test(value),
+  "Enter a valid phone number",
+);
 
 const invoiceInput = z.object({
   kind: z.enum(invoiceKindValues).default("sale"),
@@ -81,7 +96,7 @@ const invoiceInput = z.object({
     .default(todayIso),
   dueDate: optionalDate,
   partyName: z.string().trim().min(1, "Party name is required").max(160),
-  partyPhone: optionalText(32),
+  partyPhone: phone,
   partyGstin: optionalText(20),
   partyAddress: z.record(z.string(), z.string()).nullish(),
   notes: optionalText(2000),
@@ -96,7 +111,7 @@ const invoiceUpdateInput = z.object({
     .optional(),
   dueDate: optionalDate,
   partyName: z.string().trim().min(1).max(160).optional(),
-  partyPhone: optionalText(32),
+  partyPhone: phone,
   partyGstin: optionalText(20),
   partyAddress: z.record(z.string(), z.string()).nullish(),
   notes: optionalText(2000),

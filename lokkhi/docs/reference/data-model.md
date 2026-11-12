@@ -17,7 +17,7 @@ migration history.
 | `invoice_date` | date | Drives the financial year |
 | `due_date` | date | Optional |
 | `party_name` | text | Required snapshot |
-| `party_phone` | text | Optional |
+| `party_phone` | text | Optional; validated when present |
 | `party_gstin` | text | Optional |
 | `party_address` | jsonb | Optional |
 | `currency` | text | Defaults to `INR` |
@@ -44,7 +44,7 @@ Indexes: merchant + date, merchant + status, unique merchant + number.
 | `item_name` | text | Snapshot, not null |
 | `sku`, `hsn_code` | text | Snapshot |
 | `unit` | text | Snapshot, defaults to `pcs` |
-| `quantity` | numeric(14,3) | |
+| `quantity` | numeric(14,3) | App validates whole numbers for counted units |
 | `unit_price` | numeric(12,2) | |
 | `discount` | numeric(12,2) | Absolute amount |
 | `tax_rate` | numeric(5,2) | One combined rate |

@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/api";
 import { dateTime, money, movementLabels, qty } from "@/lib/format";
 import {
+  downloadReportCsv,
+  downloadReportXlsx,
+} from "@/lib/report-export";
+import {
   formatBound,
   formatFluent,
   formatRangeLabel,
@@ -74,7 +78,7 @@ export default function Report() {
       <div className="print:hidden">
         <PageHeader
           title="Report"
-          description="A printable summary of your shop for any date range."
+          description="A printable and downloadable summary of your shop for any date range."
           actions={
             <>
               <Button variant="outline" asChild>
@@ -86,6 +90,26 @@ export default function Report() {
                 disabled={loading}
               >
                 {loading ? "Refreshing…" : "Refresh"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => data && downloadReportCsv(data)}
+                disabled={!data}
+                aria-label="Download report as CSV"
+                title="Download the report as CSV"
+              >
+                <DownloadIcon />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => data && downloadReportXlsx(data)}
+                disabled={!data}
+                aria-label="Download report as XLSX"
+                title="Download the report as an Excel workbook"
+              >
+                <DownloadIcon />
+                XLSX
               </Button>
               <Button onClick={() => window.print()} disabled={!data}>
                 <PrinterIcon />
@@ -384,6 +408,25 @@ function Table({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </svg>
   );
 }
 

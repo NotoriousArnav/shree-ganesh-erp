@@ -210,4 +210,5 @@ The response repeats the snapshot fields above and adds:
 
 `lowStock` is capped at 200 rows for the report. Every shop role can call the
 endpoint. Printing and PDF export happen in the browser; the API returns JSON
-only.
+only. The CSV and XLSX downloads are also generated in the browser from this
+response, so there is no separate export endpoint.

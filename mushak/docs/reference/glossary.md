@@ -36,8 +36,8 @@ server configured with `SMTP_HOST` and the related variables.
 
 ## D
 
-**Dashboard** — The first shop screen. Shows counts, stock value, today's
-movements and low-stock products.
+**Dashboard** — The first shop screen. Shows counts, stock value, stock health
+and movement widgets for a selectable date range.
 
 **Deactivation** — Banning an account. It cannot sign in and its sessions are
 deleted.
@@ -96,6 +96,9 @@ data still comes from the server.
 
 **Reorder level** — The low-stock threshold stored on the inventory row. See
 *low stock*.
+
+**Report** — A printable shop summary for a selectable date range. Opened from
+the Dashboard and saved as a PDF through the browser's print dialog.
 
 **Role** — `super_admin`, `dev`, `merchant` or `staff`. Constrained in the
 database.

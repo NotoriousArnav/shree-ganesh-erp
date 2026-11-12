@@ -19,6 +19,7 @@ mean, and what happens when you save.
 9. [Staff and permissions](09-staff-and-permissions.md)
 10. [Settings](10-settings.md)
 11. [Troubleshooting](11-troubleshooting.md)
+12. [Report](12-report.md)
 
 In a hurry? Use the [one-page quick start](quick-start.md).
 

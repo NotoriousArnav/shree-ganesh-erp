@@ -43,7 +43,8 @@ As a result:
 
 | Screen | What it is for | Who can change things |
 | --- | --- | --- |
-| **Dashboard** | Today's totals, low stock, recent movements | Nobody; it is a summary |
+| **Dashboard** | Stock totals, low stock and movement widgets for a chosen period | Nobody; it is a summary |
+| **Report** | Printable shop summary for a chosen period | Nobody; it is a read-only view |
 | **Inventory** | Stock quantities, values and reorder levels | Catalogue permission to add; Stock permission to move stock |
 | **Catalogue** | Product definitions, prices, GST, archive | Catalogue permission |
 | **Stock** | Full movement history | Stock permission to view |

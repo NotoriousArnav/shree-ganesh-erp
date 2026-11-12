@@ -80,3 +80,61 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Print: the report page is already the preview, so printing only needs to
+ * drop the app chrome (see the `print:hidden` classes) and force a light,
+ * ink-friendly palette even when the dark theme is active.
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  :root,
+  .dark {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #111;
+    --card: #fff;
+    --card-foreground: #111;
+    --popover: #fff;
+    --popover-foreground: #111;
+    --primary: #111;
+    --primary-foreground: #fff;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #111;
+    --muted: #f4f4f5;
+    --muted-foreground: #555;
+    --accent: #f4f4f5;
+    --accent-foreground: #111;
+    --destructive: #b91c1c;
+    --destructive-foreground: #fff;
+    --border: #d4d4d8;
+    --input: #d4d4d8;
+    --ring: #999;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  section {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}

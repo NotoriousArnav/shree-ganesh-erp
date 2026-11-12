@@ -1,44 +1,90 @@
 # Dashboard
 
-The Dashboard is the first screen after signing in. It answers: *what needs my
-attention today?*
+The Dashboard is the first screen after signing in. It answers two questions:
+
+- *What needs my attention right now?* — stock health, low stock, stock value.
+- *What moved during the period I care about?* — movements, trend and recent
+  activity for any date range.
 
 ![Dashboard](../assets/screenshots/dashboard.png)
 
-## The four summary cards
+## Choosing a period
 
-| Card | What it counts |
+The panel at the top sets one range for every movement widget. Stock totals and
+valuation are always current — they are not historical.
+
+- **Presets** — Today, 7 days, 30 days and This month. These start at local
+  midnight and end now.
+- **From / To editors** — Pick a date and a time. Times include seconds.
+- **Previous / Next** — Shifts the whole window by its own length. A 7-day
+  window moves back or forward exactly seven days.
+- **Swipe** — On a phone or tablet, swipe left or right across the widgets to
+  move the window. Swiping is disabled while customising.
+
+The range is shown in two ways:
+
+- The canonical form, `HH:MM:SS@DD/MM/YYYY#Weekday`, for example
+  `14:30:00@05/11/2026#Thursday`.
+- A fluent label, for example *Thursday, 5 November 2026 at 2:30:00 pm*.
+
+The range must end after it starts and cannot be longer than 366 days. The
+Dashboard stops and explains the problem instead of querying an invalid range.
+
+> The API stores and transports Unix epoch seconds. The date/time text is only a
+> presentation layer; switching time zones or changing the format does not
+> change the data.
+
+## Widgets
+
+Each widget can be reordered or hidden. The defaults are:
+
+| Widget | What it shows |
 | --- | --- |
 | **Inventory** | Active product definitions. The hint shows archived products and the number of categories. |
-| **Low stock** | Active products whose on-hand quantity is at or below their low-stock level. |
-| **Stock value (cost)** | `on-hand × purchase price`, summed across all stock rows. The hint shows the same total at selling price. |
-| **Today** | Total quantity moved in and out since local midnight, plus the number of movements. |
+| **Low stock** | Active products at or below their reorder level. |
+| **Stock value (cost)** | `on-hand × purchase price`, with retail value and potential margin in the hint. |
+| **Movements in range** | Quantity in and out for the selected period, plus the number of movements. |
+| **Stock health** | A bar splitting active products into healthy, low and out of stock. |
+| **Movement trend** | Daily in/out bars for the period. |
+| **Needs reordering** | Up to eight products at or below their reorder level. |
+| **Recent movements** | The eight newest movements in the period. |
+| **Category value** | Cost and retail stock value per category. |
+| **Top stock value** | The five products holding the most retail value. |
 
 Notes:
 
-- A low-stock level of `0` means "do not warn", so those products never appear
-  in the low-stock count.
+- A reorder level of `0` means "do not warn", so those products never appear in
+  the low-stock count.
 - Values are converted to the shop currency from **Settings**.
-- The totals use the current stock rows, not historical cost layers.
+- Totals use current stock rows, not historical cost layers.
 
-## Needs reordering
+## Rearranging and hiding widgets
 
-The first list shows up to eight active products at or below their low-stock
-level, lowest stock first. Each row shows the reorder level and the current
-quantity.
+Choose **Customise** to enter layout mode. Every widget gets a drag handle and a
+hide button.
 
-Choose **All products** to open Inventory with the **Low stock only** filter
-already applied.
+- Drag a widget by its handle to move it. The order is saved as you drop it.
+- Choose **Hide** to remove a widget from the Dashboard. Hidden widgets appear
+  in the **Hidden widgets** strip; choose one there to bring it back.
+- Choose **Reset layout** to restore the default order and show everything
+  again.
+- Choose **Done** to leave layout mode.
 
-## Recent stock movements
-
-The second list shows the eight most recent movements with the product name,
-movement reason and time. Choose **Full history** to open the Stock screen.
+The layout belongs to the shop and is stored in this browser
+(`localStorage`, key `mushak.dashboard.layout.v1:<merchantId>`). Another
+browser or another shop starts from the default layout. Hiding a widget does not
+delete any data.
 
 ## Refresh
 
-Choose **Refresh** after someone else has recorded stock or changed products.
-The Dashboard does not poll automatically.
+The Dashboard does not poll. Choose **Refresh** after someone else records
+stock or changes products, or change the period to fetch again.
+
+## Print a shop report
+
+Choose **Report** in the Dashboard header to open the printable report. It uses
+its own range, defaults to the last 30 days, and can be printed or saved as a
+PDF. See [Report](12-report.md).
 
 ## Who can see it
 

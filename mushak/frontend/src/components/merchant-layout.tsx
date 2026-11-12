@@ -83,8 +83,8 @@ export default function MerchantLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r bg-background md:flex">
+    <div className="min-h-screen bg-muted/30 print:min-h-0 print:bg-white">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r bg-background md:flex print:hidden">
         <div className="flex items-center gap-3 border-b px-5 py-4">
           {shopImage ? (
             <img
@@ -146,8 +146,8 @@ export default function MerchantLayout() {
         </div>
       </aside>
 
-      <div className="md:pl-60">
-        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:hidden">
+      <div className="md:pl-60 print:pl-0">
+        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:hidden print:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
               {shopImage ? (
@@ -200,7 +200,7 @@ export default function MerchantLayout() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 print:max-w-none print:p-0">
           {error ? (
             <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {error}

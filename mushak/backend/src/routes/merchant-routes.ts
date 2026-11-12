@@ -2,10 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   and,
   asc,
-  count,
   desc,
   eq,
-  getTableColumns,
   gte,
   ilike,
   or,
@@ -23,6 +21,13 @@ import {
   stockMovementType,
 } from "../db/schema.js";
 import { requireMerchant, requireMerchantOwner, requirePermission, can } from "../http/auth-guard.js";
+import {
+  buildDashboard,
+  buildShopReport,
+  lastDaysRange,
+  parseEpochRange,
+  todayRange,
+} from "../reports/shop-report.js";
 import {
   isUniqueViolation,
   uniqueConstraint,
@@ -502,141 +507,22 @@ export async function registerMerchantRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/api/merchant/dashboard", { preHandler: scoped }, async (request) => {
-    const merchantId = merchantIdOf(request);
+  app.get("/api/merchant/dashboard", { preHandler: scoped }, async (request, reply) => {
+    const parsed = parseEpochRange(request.query, todayRange());
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
 
-    const [merchant] = await db
-      .select()
-      .from(merchants)
-      .where(eq(merchants.id, merchantId))
-      .limit(1);
+    return buildDashboard(merchantIdOf(request), parsed.range);
+  });
 
-    const [catalogueStats] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        active: sql<number>`count(*) filter (where ${catalogueItems.isActive})::int`,
-      })
-      .from(catalogueItems)
-      .where(eq(catalogueItems.merchantId, merchantId));
+  app.get("/api/merchant/report", { preHandler: scoped }, async (request, reply) => {
+    const parsed = parseEpochRange(request.query, lastDaysRange(30));
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
 
-    const [valueStats] = await db
-      .select({
-        stockValue: sql<number>`coalesce(sum(${inventoryItems.stockQty} * ${catalogueItems.purchasePrice}), 0)::float8`,
-        retailValue: sql<number>`coalesce(sum(${inventoryItems.stockQty} * ${catalogueItems.sellingPrice}), 0)::float8`,
-      })
-      .from(inventoryItems)
-      .innerJoin(
-        catalogueItems,
-        eq(catalogueItems.id, inventoryItems.catalogueItemId),
-      )
-      .where(eq(inventoryItems.merchantId, merchantId));
-
-    const [categoryStats] = await db
-      .select({ total: count() })
-      .from(categories)
-      .where(eq(categories.merchantId, merchantId));
-
-    const [lowStockStats] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(inventoryItems)
-      .innerJoin(
-        catalogueItems,
-        eq(catalogueItems.id, inventoryItems.catalogueItemId),
-      )
-      .where(
-        and(
-          eq(inventoryItems.merchantId, merchantId),
-          eq(catalogueItems.isActive, true),
-          gte(inventoryItems.reorderLevel, sql`0.001`),
-          sql`${inventoryItems.stockQty} <= ${inventoryItems.reorderLevel}`,
-        ),
-      );
-
-    const lowStock = await db
-      .select({
-        id: inventoryItems.id,
-        name: catalogueItems.name,
-        unit: catalogueItems.unit,
-        stockQty: inventoryItems.stockQty,
-        reorderLevel: inventoryItems.reorderLevel,
-      })
-      .from(inventoryItems)
-      .innerJoin(
-        catalogueItems,
-        eq(catalogueItems.id, inventoryItems.catalogueItemId),
-      )
-      .where(
-        and(
-          eq(inventoryItems.merchantId, merchantId),
-          eq(catalogueItems.isActive, true),
-          gte(inventoryItems.reorderLevel, sql`0.001`),
-          sql`${inventoryItems.stockQty} <= ${inventoryItems.reorderLevel}`,
-        ),
-      )
-      .orderBy(asc(inventoryItems.stockQty), asc(catalogueItems.name))
-      .limit(8);
-
-    const startOfDay = sql`date_trunc('day', now())`;
-
-    const [today] = await db
-      .select({
-        movements: sql<number>`count(*)::int`,
-        inQty: sql<number>`coalesce(sum(case when ${stockMovements.quantity} > 0 then ${stockMovements.quantity} else 0 end), 0)::float8`,
-        outQty: sql<number>`coalesce(sum(case when ${stockMovements.quantity} < 0 then -${stockMovements.quantity} else 0 end), 0)::float8`,
-      })
-      .from(stockMovements)
-      .where(
-        and(
-          eq(stockMovements.merchantId, merchantId),
-          gte(stockMovements.createdAt, startOfDay),
-        ),
-      );
-
-    const recentMovements = await db
-      .select({
-        id: stockMovements.id,
-        productId: stockMovements.inventoryItemId,
-        productName: catalogueItems.name,
-        type: stockMovements.type,
-        quantity: stockMovements.quantity,
-        unit: catalogueItems.unit,
-        note: stockMovements.note,
-        createdAt: stockMovements.createdAt,
-      })
-      .from(stockMovements)
-      .innerJoin(
-        inventoryItems,
-        eq(inventoryItems.id, stockMovements.inventoryItemId),
-      )
-      .innerJoin(
-        catalogueItems,
-        eq(catalogueItems.id, inventoryItems.catalogueItemId),
-      )
-      .where(eq(stockMovements.merchantId, merchantId))
-      .orderBy(desc(stockMovements.createdAt))
-      .limit(8);
-
-    return {
-      merchant: merchant ?? null,
-      counts: {
-        products: catalogueStats?.total ?? 0,
-        activeProducts: catalogueStats?.active ?? 0,
-        categories: categoryStats?.total ?? 0,
-        lowStock: lowStockStats?.total ?? 0,
-      },
-      value: {
-        cost: valueStats?.stockValue ?? 0,
-        retail: valueStats?.retailValue ?? 0,
-        currency: merchant?.currency ?? "INR",
-      },
-      today: {
-        movements: today?.movements ?? 0,
-        inQty: today?.inQty ?? 0,
-        outQty: today?.outQty ?? 0,
-      },
-      lowStock,
-      recentMovements,
-    };
+    return buildShopReport(
+      merchantIdOf(request),
+      parsed.range,
+      request.authSession!.user.name,
+    );
   });
 
   // ---- Categories ---------------------------------------------------------

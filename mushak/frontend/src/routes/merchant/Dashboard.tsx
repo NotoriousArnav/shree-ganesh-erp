@@ -1,49 +1,172 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
+import DashboardGrid from "@/components/dashboard/dashboard-grid";
+import { dashboardWidgetIds } from "@/components/dashboard/dashboard-widgets";
 import PageHeader from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
+import RangeField from "@/components/range-field";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, errorMessage } from "@/lib/api";
-import { dateTime, money, movementLabels, qty } from "@/lib/format";
-import type { DashboardData } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import {
+  clearLayout,
+  loadLayout,
+  saveLayout,
+  type DashboardLayout,
+} from "@/lib/dashboard-layout";
+import { formatRangeLabel, rangeQuery, shiftRange, todayRange } from "@/lib/range";
+import type { DashboardData, EpochRange } from "@/lib/types";
 
 export default function Dashboard() {
+  const [range, setRange] = useState<EpochRange>(() => todayRange());
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [customising, setCustomising] = useState(false);
+  const [layout, setLayout] = useState<DashboardLayout>({
+    order: [...dashboardWidgetIds],
+    hidden: [],
+  });
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
+  const merchantId = data?.merchant?.id ?? null;
 
-    api<DashboardData>("/api/merchant/dashboard")
-      .then(setData)
-      .catch((cause: unknown) => setError(errorMessage(cause)))
-      .finally(() => setLoading(false));
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      api<DashboardData>(`/api/merchant/dashboard?${rangeQuery(range)}`)
+        .then((next) => {
+          if (!cancelled) setData(next);
+        })
+        .catch((cause: unknown) => {
+          if (!cancelled) setError(errorMessage(cause));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [range.from, range.to, reloadToken]);
+
+  useEffect(() => {
+    if (!merchantId) return;
+    setLayout(loadLayout(merchantId, dashboardWidgetIds));
+  }, [merchantId]);
+
+  const updateLayout = useCallback(
+    (next: DashboardLayout) => {
+      setLayout(next);
+      saveLayout(merchantId, next);
+    },
+    [merchantId],
+  );
+
+  const refresh = useCallback(() => {
+    setReloadToken((token) => token + 1);
   }, []);
 
-  useEffect(load, [load]);
+  function reorder(order: string[]) {
+    updateLayout({ ...layout, order });
+  }
 
-  const currency = data?.value.currency ?? "INR";
+  function toggleHidden(id: string) {
+    const hidden = layout.hidden.includes(id)
+      ? layout.hidden.filter((entry) => entry !== id)
+      : [...layout.hidden, id];
+    updateLayout({ ...layout, hidden });
+  }
+
+  function resetLayout() {
+    clearLayout(merchantId);
+    setLayout({ order: [...dashboardWidgetIds], hidden: [] });
+  }
+
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (customising || event.pointerType === "mouse") return;
+
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        "input, button, a, select, textarea, [role='button'], [data-no-swipe]",
+      )
+    ) {
+      return;
+    }
+
+    swipe.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start) return;
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+    setRange((current) => shiftRange(current, dx < 0 ? 1 : -1));
+  }
+
+  const periodLabel = useMemo(() => formatRangeLabel(range), [range]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
         description={
           data?.merchant
-            ? `${data.merchant.name} · today at a glance`
-            : "Today at a glance"
+            ? `${data.merchant.name} · ${periodLabel}`
+            : "Your shop at a glance"
         }
         actions={
-          <Button variant="outline" onClick={load} disabled={loading}>
-            {loading ? "Refreshing…" : "Refresh"}
-          </Button>
+          <>
+            <Button
+              variant={customising ? "default" : "outline"}
+              onClick={() => setCustomising((value) => !value)}
+            >
+              {customising ? "Done" : "Customise"}
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/app/report">
+                <PrinterIcon />
+                Report
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={refresh} disabled={loading}>
+              {loading ? "Refreshing…" : "Refresh"}
+            </Button>
+          </>
         }
       />
+
+      <div className="rounded-xl border bg-card p-4">
+        <RangeField value={range} onChange={setRange} />
+        <p className="mt-3 text-xs text-muted-foreground">
+          Stock levels and valuation are current. Movement widgets cover the
+          selected range. On a phone, swipe left or right to move the window.
+        </p>
+      </div>
+
+      {customising ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed bg-background px-3 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Drag widgets to rearrange them, or hide the ones this shop does not
+            use.
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={resetLayout}>
+            Reset layout
+          </Button>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -56,158 +179,41 @@ export default function Dashboard() {
       ) : null}
 
       {data ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              title="Inventory"
-              value={String(data.counts.activeProducts)}
-              hint={`${data.counts.products - data.counts.activeProducts} archived · ${data.counts.categories} categories`}
-            />
-            <StatCard
-              title="Low stock"
-              value={String(data.counts.lowStock)}
-              hint={
-                data.counts.lowStock > 0
-                  ? "At or below the reorder level"
-                  : "Nothing needs reordering"
-              }
-              tone={data.counts.lowStock > 0 ? "warning" : undefined}
-            />
-            <StatCard
-              title="Stock value (cost)"
-              value={money(data.value.cost, currency)}
-              hint={`Retail ${money(data.value.retail, currency)}`}
-            />
-            <StatCard
-              title="Today"
-              value={`${qty(data.today.inQty)} in / ${qty(data.today.outQty)} out`}
-              hint={`${data.today.movements} stock movements`}
-            />
-          </div>
-
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Needs reordering</CardTitle>
-                <Link
-                  to="/app/inventory?lowStock=1"
-                  className="text-xs text-primary underline underline-offset-2"
-                >
-                  All products
-                </Link>
-              </CardHeader>
-              <CardContent>
-                {data.lowStock.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No product is at its low-stock level.
-                  </p>
-                ) : (
-                  <ul className="divide-y">
-                    {data.lowStock.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {item.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Reorder at {qty(item.reorderLevel)} {item.unit}
-                          </p>
-                        </div>
-                        <Badge variant="warning">
-                          {qty(item.stockQty)} {item.unit}
-                        </Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Recent stock movements</CardTitle>
-                <Link
-                  to="/app/stock"
-                  className="text-xs text-primary underline underline-offset-2"
-                >
-                  Full history
-                </Link>
-              </CardHeader>
-              <CardContent>
-                {data.recentMovements.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No stock movements yet. Add a product or record a purchase.
-                  </p>
-                ) : (
-                  <ul className="divide-y">
-                    {data.recentMovements.map((movement) => (
-                      <li
-                        key={movement.id}
-                        className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {movement.productName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {movementLabels[movement.type] ?? movement.type} ·{" "}
-                            {dateTime(movement.createdAt)}
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            "shrink-0 text-sm font-medium tabular-nums",
-                            movement.quantity > 0
-                              ? "text-emerald-700 dark:text-emerald-400"
-                              : "text-destructive",
-                          )}
-                        >
-                          {movement.quantity > 0 ? "+" : ""}
-                          {qty(movement.quantity)} {movement.unit}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </>
+        <div
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          style={{ touchAction: "pan-y" }}
+          aria-busy={loading}
+        >
+          <DashboardGrid
+            data={data}
+            order={layout.order}
+            hidden={layout.hidden}
+            customising={customising}
+            onReorder={reorder}
+            onToggleHidden={toggleHidden}
+          />
+        </div>
       ) : null}
     </div>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  hint,
-  tone,
-}: {
-  title: string;
-  value: string;
-  hint: string;
-  tone?: "warning";
-}) {
+function PrinterIcon() {
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p
-          className={cn(
-            "text-2xl font-semibold tracking-tight tabular-nums",
-            tone === "warning" && "text-amber-700 dark:text-amber-400",
-          )}
-        >
-          {value}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+    <svg
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 9V3h12v6" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect width="12" height="8" x="6" y="14" rx="1" />
+    </svg>
   );
 }

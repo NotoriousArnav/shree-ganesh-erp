@@ -33,6 +33,7 @@ published with GitHub Pages, MkDocs, or any other Markdown site generator later.
 - [Staff and permissions](user-guide/09-staff-and-permissions.md)
 - [Settings](user-guide/10-settings.md)
 - [Troubleshooting](user-guide/11-troubleshooting.md)
+- [Report](user-guide/12-report.md)
 
 ### Admin guide
 

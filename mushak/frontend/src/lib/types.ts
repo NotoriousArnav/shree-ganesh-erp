@@ -91,8 +91,63 @@ export type Profile = {
   };
 };
 
-export type DashboardData = {
-  merchant: Merchant | null;
+export type EpochRange = {
+  from: number;
+  to: number;
+};
+
+export type CategoryValue = {
+  id: string | null;
+  name: string;
+  products: number;
+  cost: number;
+  retail: number;
+};
+
+export type TopValueProduct = {
+  id: string;
+  name: string;
+  unit: string;
+  stockQty: number;
+  cost: number;
+  retail: number;
+};
+
+export type StockHealth = {
+  outOfStock: number;
+  low: number;
+  healthy: number;
+};
+
+export type PeriodSummary = {
+  movements: number;
+  inQty: number;
+  outQty: number;
+};
+
+export type MovementSeriesPoint = {
+  date: string;
+  inQty: number;
+  outQty: number;
+};
+
+export type LowStockItem = {
+  id: string;
+  name: string;
+  unit: string;
+  stockQty: number;
+  reorderLevel: number;
+};
+
+export type OutOfStockItem = {
+  id: string;
+  name: string;
+  unit: string;
+  stockQty: number;
+  updatedAt: string;
+};
+
+type ShopTotals = {
   counts: {
     products: number;
     activeProducts: number;
@@ -102,19 +157,34 @@ export type DashboardData = {
   value: {
     cost: number;
     retail: number;
+    margin: number;
     currency: string;
   };
-  today: {
-    movements: number;
-    inQty: number;
-    outQty: number;
-  };
-  lowStock: Array<{
-    id: string;
-    name: string;
-    unit: string;
-    stockQty: number;
-    reorderLevel: number;
-  }>;
+  stockHealth: StockHealth;
+  categories: CategoryValue[];
+  topValue: TopValueProduct[];
+};
+
+export type DashboardData = ShopTotals & {
+  merchant: Merchant | null;
+  range: EpochRange;
+  period: EpochRange &
+    PeriodSummary & {
+      series: MovementSeriesPoint[];
+    };
+  lowStock: LowStockItem[];
   recentMovements: Movement[];
+};
+
+export type ShopReportData = ShopTotals & {
+  merchant: Merchant | null;
+  generatedAt: string;
+  generatedBy: string;
+  range: EpochRange;
+  period: EpochRange & PeriodSummary;
+  lowStock: LowStockItem[];
+  outOfStock: OutOfStockItem[];
+  movements: Movement[];
+  movementTotal: number;
+  truncated: boolean;
 };

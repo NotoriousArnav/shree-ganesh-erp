@@ -16,6 +16,7 @@ import Dashboard from "./routes/merchant/Dashboard";
 import Catalogue from "./routes/merchant/Catalogue";
 import Inventory from "./routes/merchant/Inventory";
 import ProductDetail from "./routes/merchant/ProductDetail";
+import Report from "./routes/merchant/Report";
 import Settings from "./routes/merchant/Settings";
 import Staff from "./routes/merchant/Staff";
 import Stock from "./routes/merchant/Stock";
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Dashboard /> },
+      { path: "report", element: <Report /> },
       { path: "inventory", element: <Inventory /> },
       { path: "inventory/:id", element: <ProductDetail /> },
       { path: "catalogue", element: <Catalogue /> },

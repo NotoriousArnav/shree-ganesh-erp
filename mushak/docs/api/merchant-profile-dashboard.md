@@ -81,13 +81,22 @@ An image key from another shop returns
 
 ## Dashboard
 
-`GET /api/merchant/dashboard`
+`GET /api/merchant/dashboard?from=<epoch>&to=<epoch>`
 
-Returns the totals used by the Dashboard screen.
+Returns the shop snapshot and movement figures for a range. Both bounds are
+Unix epoch **seconds** and inclusive. Omitting them uses today (local midnight
+to now). The range must satisfy `to > from` and `to - from <= 366 days`; anything
+else returns `400` with a clear message.
+
+```bash
+curl -s -b /tmp/mushak.cookies \
+  "http://localhost:8080/api/merchant/dashboard?from=1794345600&to=1794432000"
+```
 
 ```json
 {
   "merchant": { "id": "0c8a…", "name": "Ganesh Kirana", "currency": "INR" },
+  "range": { "from": 1794345600, "to": 1794432000 },
   "counts": {
     "products": 42,
     "activeProducts": 40,
@@ -97,13 +106,23 @@ Returns the totals used by the Dashboard screen.
   "value": {
     "cost": 18450.5,
     "retail": 24300,
+    "margin": 5849.5,
     "currency": "INR"
   },
-  "today": {
-    "movements": 12,
-    "inQty": 30,
-    "outQty": 7.5
-  },
+  "stockHealth": { "outOfStock": 1, "low": 4, "healthy": 35 },
+  "categories": [
+    { "id": "c1…", "name": "Dairy", "products": 6, "cost": 2100, "retail": 2800 }
+  ],
+  "topValue": [
+    {
+      "id": "f93d…",
+      "name": "Basmati Rice 5 kg",
+      "unit": "kg",
+      "stockQty": 18,
+      "cost": 8640,
+      "retail": 10080
+    }
+  ],
   "lowStock": [
     {
       "id": "f93d…",
@@ -113,6 +132,17 @@ Returns the totals used by the Dashboard screen.
       "reorderLevel": 6
     }
   ],
+  "period": {
+    "from": 1794345600,
+    "to": 1794432000,
+    "movements": 12,
+    "inQty": 30,
+    "outQty": 7.5,
+    "series": [
+      { "date": "2026-11-08", "inQty": 10, "outQty": 2 },
+      { "date": "2026-11-09", "inQty": 20, "outQty": 5.5 }
+    ]
+  },
   "recentMovements": [
     {
       "id": "m1…",
@@ -138,11 +168,46 @@ Returns the totals used by the Dashboard screen.
 | `counts.lowStock` | Active products with a positive reorder level and quantity at or below it. |
 | `value.cost` | Sum of `stockQty × purchasePrice`. |
 | `value.retail` | Sum of `stockQty × sellingPrice`. |
+| `value.margin` | `retail - cost`. |
 | `value.currency` | The shop currency label. |
-| `today.movements` | Movements since the database's local midnight. |
-| `today.inQty` | Sum of positive movements today. |
-| `today.outQty` | Sum of the absolute value of negative movements today. |
+| `stockHealth` | Active products split into out-of-stock, low and healthy. |
+| `categories` | Cost and retail value per category; uncategorised products appear with `id: null`. |
+| `topValue` | Five active products with stock, ordered by retail value. |
+| `period.movements` | Movements inside the range. |
+| `period.inQty` | Sum of positive movements in range. |
+| `period.outQty` | Sum of the absolute value of negative movements in range. |
+| `period.series` | One point per local day, including days with no movements. |
 | `lowStock` | Up to 8 rows, lowest quantity first. |
 | `recentMovements` | Up to 8 rows, newest first. |
 
-The Dashboard does not poll. Call the endpoint again to refresh.
+Stock counts and valuation are a current snapshot; only the `period` and
+`recentMovements` fields depend on the range. The Dashboard does not poll. Call
+the endpoint again to refresh.
+
+## Shop report
+
+`GET /api/merchant/report?from=<epoch>&to=<epoch>`
+
+Returns the data behind the printable report. It uses the same epoch-second
+range rules as the Dashboard, but defaults to the **last 30 days** when the
+bounds are omitted.
+
+```bash
+curl -s -b /tmp/mushak.cookies \
+  "http://localhost:8080/api/merchant/report?from=1791753600&to=1794432000"
+```
+
+The response repeats the snapshot fields above and adds:
+
+| Field | Meaning |
+| --- | --- |
+| `generatedAt` | ISO timestamp when the report was built. |
+| `generatedBy` | Name of the signed-in user. |
+| `outOfStock` | Up to 200 active products with quantity `<= 0`. |
+| `movements` | Up to 1,000 movements in range, newest first. |
+| `movementTotal` | Total movements in range before the 1,000-row cap. |
+| `truncated` | `true` when `movementTotal` is larger than `movements.length`. |
+
+`lowStock` is capped at 200 rows for the report. Every shop role can call the
+endpoint. Printing and PDF export happen in the browser; the API returns JSON
+only.

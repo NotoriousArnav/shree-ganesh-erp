@@ -339,10 +339,71 @@ export const openapiSpec: OpenAPIV3.Document = {
           },
         },
       },
+      EpochRange: {
+        type: "object",
+        required: ["from", "to"],
+        properties: {
+          from: {
+            type: "integer",
+            description: "Start of the range as Unix epoch seconds (inclusive).",
+            example: 1794345600,
+          },
+          to: {
+            type: "integer",
+            description: "End of the range as Unix epoch seconds (inclusive).",
+            example: 1794432000,
+          },
+        },
+      },
+      CategoryValue: {
+        type: "object",
+        required: ["id", "name", "products", "cost", "retail"],
+        properties: {
+          id: { type: "string", format: "uuid", nullable: true },
+          name: { type: "string", example: "Grains & Pulses" },
+          products: { type: "integer", example: 4 },
+          cost: { type: "number", example: 14170 },
+          retail: { type: "number", example: 16715 },
+        },
+      },
+      TopValueProduct: {
+        type: "object",
+        required: ["id", "name", "unit", "stockQty", "cost", "retail"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string", example: "Basmati Rice 5 kg" },
+          unit: ref("Unit"),
+          stockQty: { type: "number", example: 18 },
+          cost: { type: "number", example: 8640 },
+          retail: { type: "number", example: 10080 },
+        },
+      },
+      StockHealth: {
+        type: "object",
+        required: ["outOfStock", "low", "healthy"],
+        properties: {
+          outOfStock: { type: "integer" },
+          low: { type: "integer" },
+          healthy: { type: "integer" },
+        },
+      },
       Dashboard: {
         type: "object",
+        required: [
+          "merchant",
+          "range",
+          "counts",
+          "value",
+          "stockHealth",
+          "categories",
+          "topValue",
+          "lowStock",
+          "period",
+          "recentMovements",
+        ],
         properties: {
           merchant: { allOf: [ref("Merchant")], nullable: true },
+          range: ref("EpochRange"),
           counts: {
             type: "object",
             properties: {
@@ -357,16 +418,18 @@ export const openapiSpec: OpenAPIV3.Document = {
             properties: {
               cost: { type: "number" },
               retail: { type: "number" },
-              currency: { type: "string" },
+              margin: { type: "number" },
+              currency: { type: "string", example: "INR" },
             },
           },
-          today: {
-            type: "object",
-            properties: {
-              movements: { type: "integer" },
-              inQty: { type: "number" },
-              outQty: { type: "number" },
-            },
+          stockHealth: ref("StockHealth"),
+          categories: {
+            type: "array",
+            items: ref("CategoryValue"),
+          },
+          topValue: {
+            type: "array",
+            items: ref("TopValueProduct"),
           },
           lowStock: {
             type: "array",
@@ -381,9 +444,130 @@ export const openapiSpec: OpenAPIV3.Document = {
               },
             },
           },
+          period: {
+            allOf: [ref("EpochRange")],
+            type: "object",
+            properties: {
+              movements: { type: "integer" },
+              inQty: { type: "number" },
+              outQty: { type: "number" },
+              series: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    date: { type: "string", format: "date", example: "2026-11-08" },
+                    inQty: { type: "number" },
+                    outQty: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
           recentMovements: {
             type: "array",
             items: ref("MovementWithProduct"),
+          },
+        },
+      },
+      ShopReport: {
+        type: "object",
+        required: [
+          "merchant",
+          "generatedAt",
+          "generatedBy",
+          "range",
+          "counts",
+          "value",
+          "stockHealth",
+          "categories",
+          "topValue",
+          "lowStock",
+          "outOfStock",
+          "period",
+          "movements",
+          "movementTotal",
+          "truncated",
+        ],
+        properties: {
+          merchant: { allOf: [ref("Merchant")], nullable: true },
+          generatedAt: { type: "string", format: "date-time" },
+          generatedBy: { type: "string", example: "Shop Owner" },
+          range: ref("EpochRange"),
+          counts: {
+            type: "object",
+            properties: {
+              products: { type: "integer" },
+              activeProducts: { type: "integer" },
+              categories: { type: "integer" },
+              lowStock: { type: "integer" },
+            },
+          },
+          value: {
+            type: "object",
+            properties: {
+              cost: { type: "number" },
+              retail: { type: "number" },
+              margin: { type: "number" },
+              currency: { type: "string", example: "INR" },
+            },
+          },
+          stockHealth: ref("StockHealth"),
+          categories: {
+            type: "array",
+            items: ref("CategoryValue"),
+          },
+          topValue: {
+            type: "array",
+            items: ref("TopValueProduct"),
+          },
+          lowStock: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                unit: ref("Unit"),
+                stockQty: { type: "number" },
+                reorderLevel: { type: "number" },
+              },
+            },
+          },
+          outOfStock: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                unit: ref("Unit"),
+                stockQty: { type: "number" },
+                updatedAt: { type: "string", format: "date-time" },
+              },
+            },
+          },
+          period: {
+            allOf: [ref("EpochRange")],
+            type: "object",
+            properties: {
+              movements: { type: "integer" },
+              inQty: { type: "number" },
+              outQty: { type: "number" },
+            },
+          },
+          movements: {
+            type: "array",
+            description: "Most recent 1000 movements in the range, newest first.",
+            items: ref("MovementWithProduct"),
+          },
+          movementTotal: {
+            type: "integer",
+            description: "Total movements in the range before the 1000-row cap.",
+          },
+          truncated: {
+            type: "boolean",
+            description: "True when movementTotal exceeds the returned movements.",
           },
         },
       },
@@ -991,9 +1175,58 @@ export const openapiSpec: OpenAPIV3.Document = {
       get: {
         tags: ["Dashboard"],
         operationId: "getDashboard",
-        summary: "Shop totals, low stock and recent movements",
+        summary: "Shop totals, low stock and movements for a range",
+        description:
+          "Stock totals and valuation are a current snapshot. Movement figures cover the requested epoch range, which defaults to the current day and may not exceed 366 days.",
+        parameters: [
+          {
+            name: "from",
+            in: "query",
+            required: false,
+            description: "Unix epoch seconds (inclusive). Defaults to the start of today.",
+            schema: { type: "integer", minimum: 1 },
+          },
+          {
+            name: "to",
+            in: "query",
+            required: false,
+            description: "Unix epoch seconds (inclusive). Defaults to now.",
+            schema: { type: "integer", minimum: 1 },
+          },
+        ],
         responses: {
           "200": jsonResponse("Dashboard", ref("Dashboard")),
+          "400": errorResponse("Invalid range: to must be after from, or the range is over 366 days"),
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/merchant/report": {
+      get: {
+        tags: ["Dashboard"],
+        operationId: "getShopReport",
+        summary: "Printable shop report for a range",
+        description:
+          "Returns the same shop snapshot as the dashboard plus stock-health detail, out-of-stock rows and up to 1000 movements. Defaults to the last 30 days.",
+        parameters: [
+          {
+            name: "from",
+            in: "query",
+            required: false,
+            description: "Unix epoch seconds (inclusive). Defaults to 30 days ago.",
+            schema: { type: "integer", minimum: 1 },
+          },
+          {
+            name: "to",
+            in: "query",
+            required: false,
+            description: "Unix epoch seconds (inclusive). Defaults to now.",
+            schema: { type: "integer", minimum: 1 },
+          },
+        ],
+        responses: {
+          "200": jsonResponse("Shop report", ref("ShopReport")),
+          "400": errorResponse("Invalid range: to must be after from, or the range is over 366 days"),
           ...errorResponses,
         },
       },

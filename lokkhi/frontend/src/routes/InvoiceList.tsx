@@ -154,8 +154,8 @@ export default function InvoiceList() {
       ) : null}
 
       {items.length > 0 ? (
-        <div className="invoice-list-wrap overflow-hidden rounded-2xl border border-border bg-card">
-          <table className="invoice-list-table w-full text-sm">
+        <div className="invoice-list-wrap overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="invoice-list-table w-full min-w-[720px] text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Number</th>

@@ -248,6 +248,7 @@
   }
 
   .invoice-list-table {
+    min-width: 0 !important;
     font-size: 9pt;
   }
 

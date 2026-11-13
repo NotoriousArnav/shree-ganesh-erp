@@ -390,231 +390,263 @@ export default function InvoiceEditor() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card">
-        <div>
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2.5 font-medium">Item</th>
-                <th className="w-24 px-2 py-2.5 font-medium">Qty</th>
-                <th className="w-24 px-2 py-2.5 font-medium">Unit</th>
-                <th className="w-28 px-2 py-2.5 font-medium">Price</th>
-                <th className="w-24 px-2 py-2.5 font-medium">Disc.</th>
-                <th className="w-20 px-2 py-2.5 font-medium">Tax %</th>
-                <th className="w-28 px-2 py-2.5 text-right font-medium">Total</th>
-                <th className="w-10 px-2 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => {
-                const lineTotals = invoiceLineTotals({
-                  quantity: Number(line.quantity) || 0,
-                  unitPrice: Number(line.unitPrice) || 0,
-                  discount: Number(line.discount) || 0,
-                  taxRate: Number(line.taxRate) || 0,
-                });
-                const showSuggestions =
-                  suggestFor === line.key && activeName.trim().length >= 2;
+        {/* Column headings are only useful once the line becomes a row. */}
+        <div className="hidden bg-muted/60 px-3 py-2.5 text-xs uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(0,2.2fr)_5rem_6rem_minmax(0,1fr)_minmax(0,0.9fr)_5rem_6.5rem_2rem] md:items-center md:gap-2">
+          <span>Item</span>
+          <span>Qty</span>
+          <span>Unit</span>
+          <span>Price</span>
+          <span>Disc.</span>
+          <span>Tax %</span>
+          <span className="text-right">Total</span>
+          <span />
+        </div>
 
-                return (
-                  <tr key={line.key} className="border-t border-border/60">
-                    <td className="px-3 py-2 align-top">
-                      <div className="relative">
-                        <Input
-                          value={line.itemName}
-                          onChange={(event) => {
-                            updateLine(line.key, {
-                              itemName: event.target.value,
-                              catalogueItemId: null,
-                            });
-                            setSuggestFor(line.key);
-                          }}
-                          onFocus={() => setSuggestFor(line.key)}
-                          onBlur={() => {
-                            // Let a click on a suggestion land first.
-                            setTimeout(() => setSuggestFor(null), 120);
-                          }}
-                          placeholder="Start typing or enter any item"
-                          autoComplete="off"
-                        />
-                        {line.catalogueItemId ? (
-                          <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                            Linked to Mushak
-                          </span>
-                        ) : line.itemName.trim() ? (
-                          <span className="mt-1 block text-[11px] text-muted-foreground/70">
-                            Manual item — saved with this invoice only
-                          </span>
+        <div className="divide-y divide-border/60">
+          {lines.map((line) => {
+            const lineTotals = invoiceLineTotals({
+              quantity: Number(line.quantity) || 0,
+              unitPrice: Number(line.unitPrice) || 0,
+              discount: Number(line.discount) || 0,
+              taxRate: Number(line.taxRate) || 0,
+            });
+            const showSuggestions =
+              suggestFor === line.key && activeName.trim().length >= 2;
+
+            return (
+              <div
+                key={line.key}
+                className="grid grid-cols-2 gap-x-2 gap-y-2 px-3 py-3 md:grid-cols-[minmax(0,2.2fr)_5rem_6rem_minmax(0,1fr)_minmax(0,0.9fr)_5rem_6.5rem_2rem] md:items-start md:gap-2"
+              >
+                <div className="col-span-2 min-w-0 md:col-span-1">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Item
+                  </span>
+                  <div className="relative">
+                    <Input
+                      value={line.itemName}
+                      onChange={(event) => {
+                        updateLine(line.key, {
+                          itemName: event.target.value,
+                          catalogueItemId: null,
+                        });
+                        setSuggestFor(line.key);
+                      }}
+                      onFocus={() => setSuggestFor(line.key)}
+                      onBlur={() => {
+                        // Let a click on a suggestion land first.
+                        setTimeout(() => setSuggestFor(null), 120);
+                      }}
+                      placeholder="Start typing or enter any item"
+                      autoComplete="off"
+                      aria-label="Item"
+                    />
+                    {line.catalogueItemId ? (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                        Linked to Mushak
+                      </span>
+                    ) : line.itemName.trim() ? (
+                      <span className="mt-1 block text-[11px] text-muted-foreground/70">
+                        Manual item — saved with this invoice only
+                      </span>
+                    ) : null}
+
+                    {showSuggestions ? (
+                      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                        {suggestions.map((suggestion) => (
+                          <button
+                            key={suggestion.id}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              pickSuggestion(line.key, suggestion);
+                            }}
+                            className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/60"
+                          >
+                            <span className="min-w-0">
+                              <span className="font-medium">
+                                {suggestion.name}
+                              </span>
+                              <span className="ml-2 text-xs text-muted-foreground/70">
+                                {suggestion.sku ?? "no SKU"}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-right text-xs text-muted-foreground">
+                              {money(
+                                kind === "sale"
+                                  ? suggestion.sellingPrice
+                                  : suggestion.purchasePrice,
+                              )}{" "}
+                              · {suggestion.stockQty} {suggestion.unit}
+                            </span>
+                          </button>
+                        ))}
+
+                        {suggestLoading ? (
+                          <p className="px-3 py-2 text-xs text-muted-foreground/70">
+                            Searching Mushak…
+                          </p>
                         ) : null}
 
-                        {showSuggestions ? (
-                          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-                            {suggestions.map((suggestion) => (
-                              <button
-                                key={suggestion.id}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  pickSuggestion(line.key, suggestion);
-                                }}
-                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/60"
-                              >
-                                <span>
-                                  <span className="font-medium">
-                                    {suggestion.name}
-                                  </span>
-                                  <span className="ml-2 text-xs text-muted-foreground/70">
-                                    {suggestion.sku ?? "no SKU"}
-                                  </span>
-                                </span>
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                  {money(
-                                    kind === "sale"
-                                      ? suggestion.sellingPrice
-                                      : suggestion.purchasePrice,
-                                  )}{" "}
-                                  · {suggestion.stockQty} {suggestion.unit}
-                                </span>
-                              </button>
-                            ))}
-
-                            {suggestLoading ? (
-                              <p className="px-3 py-2 text-xs text-muted-foreground/70">
-                                Searching Mushak…
-                              </p>
-                            ) : null}
-
-                            {!suggestLoading && suggestions.length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-muted-foreground">
-                                {suggestFailed ? (
-                                  "Mushak suggestions unavailable — you can still add this item."
-                                ) : (
-                                  <>
-                                    <p>No match in Mushak.</p>
-                                    <button
-                                      type="button"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        setSuggestFor(null);
-                                      }}
-                                      className="mt-1 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
-                                    >
-                                      Use “{activeName.trim()}” as a manual item
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            ) : null}
+                        {!suggestLoading && suggestions.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            {suggestFailed ? (
+                              "Mushak suggestions unavailable — you can still add this item."
+                            ) : (
+                              <>
+                                <p>No match in Mushak.</p>
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setSuggestFor(null);
+                                  }}
+                                  className="mt-1 text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                                >
+                                  Use “{activeName.trim()}” as a manual item
+                                </button>
+                              </>
+                            )}
                           </div>
                         ) : null}
                       </div>
-                    </td>
+                    ) : null}
+                  </div>
+                </div>
 
-                    <td className="px-2 py-2 align-top">
-                      <Input
-                        type="number"
-                        min={unitStep(line.unit)}
-                        step={unitStep(line.unit)}
-                        inputMode={
-                          unitStep(line.unit) === 1 ? "numeric" : "decimal"
-                        }
-                        value={line.quantity}
-                        aria-invalid={Boolean(
-                          quantityError(line.unit, Number(line.quantity)),
-                        )}
-                        title={quantityError(
-                          line.unit,
-                          Number(line.quantity),
-                        ) ?? undefined}
-                        onChange={(event) =>
-                          updateLine(line.key, { quantity: event.target.value })
-                        }
-                      />
-                    </td>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Qty
+                  </span>
+                  <Input
+                    type="number"
+                    min={unitStep(line.unit)}
+                    step={unitStep(line.unit)}
+                    inputMode={
+                      unitStep(line.unit) === 1 ? "numeric" : "decimal"
+                    }
+                    value={line.quantity}
+                    aria-label="Quantity"
+                    aria-invalid={Boolean(
+                      quantityError(line.unit, Number(line.quantity)),
+                    )}
+                    title={
+                      quantityError(line.unit, Number(line.quantity)) ??
+                      undefined
+                    }
+                    onChange={(event) =>
+                      updateLine(line.key, { quantity: event.target.value })
+                    }
+                  />
+                </label>
 
-                    <td className="px-2 py-2 align-top">
-                      <Select
-                        value={line.unit}
-                        onChange={(event) => {
-                          const unit = event.target.value;
-                          // Switching to a counted unit rounds off any
-                          // fractional quantity left over from a measured one.
-                          const quantity =
-                            unitStep(unit) === 1
-                              ? String(Math.round(Number(line.quantity) || 0) || 1)
-                              : line.quantity;
-                          updateLine(line.key, { unit, quantity });
-                        }}
-                      >
-                        {units.map((unit) => (
-                          <option key={unit} value={unit}>
-                            {unit}
-                          </option>
-                        ))}
-                      </Select>
-                    </td>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Unit
+                  </span>
+                  <Select
+                    value={line.unit}
+                    aria-label="Unit"
+                    onChange={(event) => {
+                      const unit = event.target.value;
+                      // Switching to a counted unit rounds off any
+                      // fractional quantity left over from a measured one.
+                      const quantity =
+                        unitStep(unit) === 1
+                          ? String(Math.round(Number(line.quantity) || 0) || 1)
+                          : line.quantity;
+                      updateLine(line.key, { unit, quantity });
+                    }}
+                  >
+                    {units.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
 
-                    <td className="px-2 py-2 align-top">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={line.unitPrice}
-                        onChange={(event) =>
-                          updateLine(line.key, { unitPrice: event.target.value })
-                        }
-                      />
-                    </td>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Price
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={line.unitPrice}
+                    aria-label="Unit price"
+                    onChange={(event) =>
+                      updateLine(line.key, { unitPrice: event.target.value })
+                    }
+                  />
+                </label>
 
-                    <td className="px-2 py-2 align-top">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={line.discount}
-                        onChange={(event) =>
-                          updateLine(line.key, { discount: event.target.value })
-                        }
-                      />
-                    </td>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Discount
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={line.discount}
+                    aria-label="Discount"
+                    onChange={(event) =>
+                      updateLine(line.key, { discount: event.target.value })
+                    }
+                  />
+                </label>
 
-                    <td className="px-2 py-2 align-top">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={line.taxRate}
-                        onChange={(event) =>
-                          updateLine(line.key, { taxRate: event.target.value })
-                        }
-                      />
-                    </td>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Tax %
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={line.taxRate}
+                    aria-label="Tax rate percent"
+                    onChange={(event) =>
+                      updateLine(line.key, { taxRate: event.target.value })
+                    }
+                  />
+                </label>
 
-                    <td className="px-2 py-2 text-right align-top tabular-nums">
-                      {money(lineTotals.lineTotal)}
-                    </td>
+                <div className="min-w-0">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground md:hidden">
+                    Total
+                  </span>
+                  <div className="flex h-9 items-center justify-end rounded-lg bg-muted/40 px-3 text-sm font-medium tabular-nums md:h-10 md:bg-transparent md:px-0 md:font-normal">
+                    {money(lineTotals.lineTotal)}
+                  </div>
+                </div>
 
-                    <td className="px-2 py-2 align-top">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label="Remove line"
-                        onClick={() =>
-                          setLines((current) =>
-                            current.length === 1
-                              ? [newLine()]
-                              : current.filter((item) => item.key !== line.key),
-                          )
-                        }
-                      >
-                        ×
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                <div className="col-span-2 flex justify-end md:col-span-1 md:justify-center md:pt-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Remove line"
+                    onClick={() =>
+                      setLines((current) =>
+                        current.length === 1
+                          ? [newLine()]
+                          : current.filter((item) => item.key !== line.key),
+                      )
+                    }
+                  >
+                    <span className="md:hidden">Remove line</span>
+                    <span className="hidden md:inline">×</span>
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2">

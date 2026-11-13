@@ -24,12 +24,21 @@ Choose **Save as PDF** in the print dialog to keep a digital copy.
 
 Hints are for you, not for the customer. The invoice document stays clean.
 
+## Page size
+
+Printing uses A4 portrait with 12 mm margins. The document ignores the app's
+on-screen width and padding, so the whole table — including the Total column — is
+always laid out inside the printable page, even in a long or unusual invoice.
+
 ## Long invoices
 
 The printed table is sized to the page, so the Total column is never cut off.
 When an invoice runs past one page, the column headings repeat at the top of each
 new page and rows are not split across pages. The totals block always appears at
 the end, aligned to the right.
+
+Very long item names, codes and phone numbers wrap onto further lines rather than
+pushing the table wider than the page.
 
 ## Drafts
 

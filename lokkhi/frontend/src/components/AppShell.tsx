@@ -57,15 +57,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <header className="print-hide border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <Link to="/" className="flex items-baseline gap-2">
               <span className="text-lg font-semibold tracking-tight">
                 Lokkhi
               </span>
               <span className="text-xs text-muted-foreground">Invoices</span>
             </Link>
-            <nav className="flex items-center gap-1">
+            <nav className="flex flex-wrap items-center gap-1">
               <NavLink to="/" end className={navClass}>
                 Invoices
               </NavLink>
@@ -75,13 +75,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
               >
                 Purchases
               </Link>
+              <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+              <ThemeToggle className="shrink-0" />
             </nav>
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden text-xs text-muted-foreground sm:inline">
               {merchantName}
             </span>
-            <ThemeToggle />
             <Button
               variant="outline"
               size="sm"

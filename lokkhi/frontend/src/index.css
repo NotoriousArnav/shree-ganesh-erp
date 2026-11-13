@@ -87,8 +87,8 @@
  */
 @media print {
   @page {
-    size: A4;
-    margin: 14mm;
+    size: A4 portrait;
+    margin: 12mm;
   }
 
   :root,
@@ -117,6 +117,9 @@
 
   html,
   body {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff !important;
   }
 
@@ -124,13 +127,28 @@
     font-size: 11pt;
   }
 
+  /* The app shell centres content for a screen; paper has its own margins. */
+  #root,
+  main {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   thead {
     display: table-header-group;
   }
 
   tr,
-  section {
+  section,
+  .invoice-header,
+  .invoice-footer {
     break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .print-hide {
@@ -145,6 +163,8 @@
    * becomes fixed-width, sized to the printable page, with tighter padding.
    */
   .invoice-document {
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: visible !important;
     border: 0 !important;
     border-radius: 0 !important;
@@ -161,6 +181,7 @@
 
   .invoice-table {
     width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     table-layout: fixed;
     font-size: 9.5pt;
@@ -170,6 +191,8 @@
   .invoice-table td {
     padding: 5px 6px !important;
     vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .invoice-table th:first-child,
@@ -199,17 +222,6 @@
   }
   .invoice-table th:nth-child(6) {
     width: 15%;
-  }
-
-  .invoice-table td:first-child {
-    overflow-wrap: anywhere;
-  }
-
-  .invoice-table td:nth-child(2),
-  .invoice-table td:nth-child(3),
-  .invoice-table td:nth-child(4),
-  .invoice-table td:nth-child(6) {
-    white-space: nowrap;
   }
 
   .invoice-footer {

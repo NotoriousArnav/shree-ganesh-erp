@@ -19,3 +19,4 @@ but it never insists on a match.
 4. [Hints and Add to Mushak](04-hints-and-adding-to-mushak.md)
 5. [Issuing, stock and voiding](05-stock-and-issuing.md)
 6. [Printing](06-printing.md)
+7. [Exporting an invoice](07-exporting.md)

@@ -24,6 +24,11 @@ Every `/api/merchant/*` route requires a signed-in `merchant` or `staff` account
 linked to a merchant. The merchant id comes from the session, never from the
 request body or query string.
 
+`/api/public/invoices/:id` is the one deliberate exception. It powers the
+`/invoices/:id?anon=true` share page, so it needs no session. It returns only the
+fields printed on the document and omits merchant ids, catalogue links and stock
+sync state.
+
 ## Conventions
 
 - JSON in, JSON out.
@@ -46,6 +51,7 @@ request body or query string.
 | `POST` | `/api/merchant/invoices/:id/lines/:lineId/retry-stock` | Retry one line |
 | `POST` | `/api/merchant/invoices/:id/lines/:lineId/add-to-mushak` | Create and link a Mushak item |
 | `GET` | `/api/merchant/invoices/suggestions?q=` | Catalogue search |
+| `GET` | `/api/public/invoices/:id` | Read-only invoice behind a share link |
 
 See [Invoices](invoices.md) for request and response examples.
 

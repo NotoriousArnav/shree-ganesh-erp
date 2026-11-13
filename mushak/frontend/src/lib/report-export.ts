@@ -1,3 +1,5 @@
+import { buildXlsx, buildZip, rowsToCsv, type ExportCell, type ExportSheet } from "@ganesh/shared";
+
 import { dateTime, movementLabels } from "./format";
 import { formatBound, formatFluent } from "./range";
 import type { ShopReportData } from "./types";
@@ -6,22 +8,9 @@ import type { ShopReportData } from "./types";
  * Client-side report exports.
  *
  * The report is already loaded in the browser, so both formats are generated
- * from that snapshot. XLSX is a small ZIP of SpreadsheetML parts written here
- * rather than a new runtime dependency.
+ * from that snapshot. The XLSX and ZIP writers live in `@ganesh/shared` so
+ * Lokkhi can export invoices with the same package structure.
  */
-
-export type ExportCell = string | number | null;
-
-export type ExportSheet = {
-  name: string;
-  /** Name of the CSV file when the report is downloaded as a ZIP. */
-  file: string;
-  rows: ExportCell[][];
-  /** Row indexes (zero-based) that should use the bold header style. */
-  headerRows?: number[];
-};
-
-const encoder = new TextEncoder();
 
 function shopAddress(data: ShopReportData) {
   const address = data.merchant?.address;
@@ -89,13 +78,11 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
   return [
     {
       name: "Summary",
-      file: "01-summary.csv",
       rows: reportRows(data),
       headerRows: [0],
     },
     {
       name: "Categories",
-      file: "02-categories.csv",
       rows: [
         ["Category", "Products", `Cost (${currency})`, `Retail (${currency})`],
         ...data.categories.map((row): ExportCell[] => [
@@ -109,7 +96,6 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
     },
     {
       name: "Needs reordering",
-      file: "03-needs-reordering.csv",
       rows: [
         ["Product", "Stock", "Reorder at", "Unit"],
         ...data.lowStock.map((row): ExportCell[] => [
@@ -123,7 +109,6 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
     },
     {
       name: "Out of stock",
-      file: "04-out-of-stock.csv",
       rows: [
         ["Product", "Stock", "Unit", "Last updated"],
         ...data.outOfStock.map((row): ExportCell[] => [
@@ -137,7 +122,6 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
     },
     {
       name: "Top stock value",
-      file: "05-top-stock-value.csv",
       rows: [
         ["Product", "On hand", "Unit", `Cost (${currency})`, `Retail (${currency})`],
         ...data.topValue.map((row): ExportCell[] => [
@@ -152,7 +136,6 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
     },
     {
       name: "Movements",
-      file: "06-movements.csv",
       rows: [
         ["When", "Product", "Type", "Quantity", "Unit", "Unit cost", "Note", "Recorded at (ISO)"],
         ...data.movements.map((row): ExportCell[] => [
@@ -171,328 +154,21 @@ export function reportSheets(data: ShopReportData): ExportSheet[] {
   ];
 }
 
-function csvEscape(value: ExportCell) {
-  const text = value === null || value === undefined ? "" : String(value);
-  if (/[",\r\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
-  return text;
-}
-
-function rowsToCsv(rows: ExportCell[][]) {
-  const lines = rows.map((row) => row.map(csvEscape).join(","));
-  return `\uFEFF${lines.join("\r\n")}\r\n`;
-}
-
 /** One UTF-8 CSV per report section, ready to be zipped. */
 export function reportCsvFiles(data: ShopReportData) {
-  return reportSheets(data).map((sheet) => ({
-    name: sheet.file,
+  const files = [
+    "01-summary.csv",
+    "02-categories.csv",
+    "03-needs-reordering.csv",
+    "04-out-of-stock.csv",
+    "05-top-stock-value.csv",
+    "06-movements.csv",
+  ];
+
+  return reportSheets(data).map((sheet, index) => ({
+    name: files[index] ?? `${index + 1}-${sheet.name}.csv`,
     content: rowsToCsv(sheet.rows),
   }));
-}
-
-function xmlEscape(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function columnName(index: number) {
-  let value = index + 1;
-  let name = "";
-
-  while (value > 0) {
-    const remainder = (value - 1) % 26;
-    name = String.fromCharCode(65 + remainder) + name;
-    value = Math.floor((value - 1) / 26);
-  }
-
-  return name;
-}
-
-function safeSheetName(name: string, used: Set<string>) {
-  const cleaned = name.replace(/[\[\]:*?/\\]/g, " ").trim().slice(0, 31) || "Sheet";
-  let candidate = cleaned;
-  let suffix = 2;
-
-  while (used.has(candidate.toLowerCase())) {
-    const tail = ` (${suffix})`;
-    candidate = `${cleaned.slice(0, 31 - tail.length)}${tail}`;
-    suffix += 1;
-  }
-
-  used.add(candidate.toLowerCase());
-  return candidate;
-}
-
-function cellXml(cell: ExportCell, reference: string, style: number) {
-  if (cell === null || cell === undefined || cell === "") {
-    return "";
-  }
-
-  const styleAttribute = style > 0 ? ` s="${style}"` : "";
-
-  if (typeof cell === "number" && Number.isFinite(cell)) {
-    return `<c r="${reference}"${styleAttribute}><v>${cell}</v></c>`;
-  }
-
-  const text = xmlEscape(String(cell).slice(0, 32_767));
-  return `<c r="${reference}"${styleAttribute} t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
-}
-
-function sheetXml(sheet: ExportSheet) {
-  const widths: number[] = [];
-  for (const row of sheet.rows.slice(0, 200)) {
-    row.forEach((cell, index) => {
-      const length = cell === null || cell === undefined ? 0 : String(cell).length;
-      widths[index] = Math.max(widths[index] ?? 0, length);
-    });
-  }
-
-  const cols = widths
-    .map((width, index) => {
-      const size = Math.min(Math.max(width + 2, 10), 50);
-      return `<col min="${index + 1}" max="${index + 1}" width="${size}" customWidth="1"/>`;
-    })
-    .join("");
-
-  const headerRows = new Set(sheet.headerRows ?? []);
-  const rows = sheet.rows
-    .map((row, rowIndex) => {
-      const cells = row
-        .map((cell, cellIndex) =>
-          cellXml(cell, `${columnName(cellIndex)}${rowIndex + 1}`, headerRows.has(rowIndex) ? 1 : 0),
-        )
-        .join("");
-      return `<row r="${rowIndex + 1}">${cells}</row>`;
-    })
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-<cols>${cols}</cols>
-<sheetData>${rows}</sheetData>
-</worksheet>`;
-}
-
-const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<fonts count="2">
-<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
-<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
-</fonts>
-<fills count="3">
-<fill><patternFill patternType="none"/></fill>
-<fill><patternFill patternType="gray125"/></fill>
-<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill>
-</fills>
-<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="2">
-<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="top"/></xf>
-</cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`;
-
-function workbookXml(sheets: ExportSheet[]) {
-  const entries = sheets
-    .map(
-      (sheet, index) =>
-        `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets>${entries}</sheets>
-</workbook>`;
-}
-
-function workbookRelsXml(sheets: ExportSheet[]) {
-  const entries = sheets
-    .map(
-      (_sheet, index) =>
-        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-${entries}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
-}
-
-function contentTypesXml(sheets: ExportSheet[]) {
-  const entries = sheets
-    .map(
-      (_sheet, index) =>
-        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-${entries}
-</Types>`;
-}
-
-const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`;
-
-const crcTable = (() => {
-  const table = new Uint32Array(256);
-  for (let index = 0; index < 256; index += 1) {
-    let value = index;
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-    }
-    table[index] = value >>> 0;
-  }
-  return table;
-})();
-
-function crc32(bytes: Uint8Array) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-type ZipFile = { name: string; bytes: Uint8Array };
-
-function uint16(value: number) {
-  const bytes = new Uint8Array(2);
-  new DataView(bytes.buffer).setUint16(0, value, true);
-  return bytes;
-}
-
-function uint32(value: number) {
-  const bytes = new Uint8Array(4);
-  new DataView(bytes.buffer).setUint32(0, value, true);
-  return bytes;
-}
-
-function concat(parts: Uint8Array[]) {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-/** Builds a stored (uncompressed) ZIP archive from arbitrary files. */
-function buildZip(files: ZipFile[]): Uint8Array {
-  const now = new Date();
-  const dosTime =
-    ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) &
-    0xffff;
-  const dosDate =
-    (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) &
-    0xffff;
-
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let offset = 0;
-
-  for (const file of files) {
-    const name = encoder.encode(file.name);
-    const crc = crc32(file.bytes);
-
-    const local = concat([
-      uint32(0x04034b50),
-      uint16(20),
-      uint16(0x0800),
-      uint16(0),
-      uint16(dosTime),
-      uint16(dosDate),
-      uint32(crc),
-      uint32(file.bytes.length),
-      uint32(file.bytes.length),
-      uint16(name.length),
-      uint16(0),
-      name,
-      file.bytes,
-    ]);
-    localParts.push(local);
-
-    centralParts.push(
-      concat([
-        uint32(0x02014b50),
-        uint16(20),
-        uint16(20),
-        uint16(0x0800),
-        uint16(0),
-        uint16(dosTime),
-        uint16(dosDate),
-        uint32(crc),
-        uint32(file.bytes.length),
-        uint32(file.bytes.length),
-        uint16(name.length),
-        uint16(0),
-        uint16(0),
-        uint16(0),
-        uint16(0),
-        uint32(0),
-        uint32(offset),
-        name,
-      ]),
-    );
-
-    offset += local.length;
-  }
-
-  const central = concat(centralParts);
-  const end = concat([
-    uint32(0x06054b50),
-    uint16(0),
-    uint16(0),
-    uint16(files.length),
-    uint16(files.length),
-    uint32(central.length),
-    uint32(offset),
-    uint16(0),
-  ]);
-
-  return concat([...localParts, central, end]);
-}
-
-/**
- * Builds a valid .xlsx package using stored ZIP entries. Excel only needs the
- * package structure and SpreadsheetML parts, so this avoids shipping a
- * spreadsheet library for one download button.
- */
-export function buildXlsx(sheets: ExportSheet[]): Uint8Array {
-  const usedNames = new Set<string>();
-  const named = sheets.map((sheet) => ({
-    ...sheet,
-    name: safeSheetName(sheet.name, usedNames),
-  }));
-
-  return buildZip([
-    { name: "[Content_Types].xml", bytes: encoder.encode(contentTypesXml(named)) },
-    { name: "_rels/.rels", bytes: encoder.encode(rootRelsXml) },
-    { name: "xl/workbook.xml", bytes: encoder.encode(workbookXml(named)) },
-    { name: "xl/_rels/workbook.xml.rels", bytes: encoder.encode(workbookRelsXml(named)) },
-    { name: "xl/styles.xml", bytes: encoder.encode(stylesXml) },
-    ...named.map((sheet, index) => ({
-      name: `xl/worksheets/sheet${index + 1}.xml`,
-      bytes: encoder.encode(sheetXml(sheet)),
-    })),
-  ]);
 }
 
 /** Builds a ZIP containing one CSV per report section. */
@@ -500,7 +176,7 @@ export function buildCsvZip(data: ShopReportData): Uint8Array {
   return buildZip(
     reportCsvFiles(data).map((file) => ({
       name: file.name,
-      bytes: encoder.encode(file.content),
+      bytes: new TextEncoder().encode(file.content),
     })),
   );
 }

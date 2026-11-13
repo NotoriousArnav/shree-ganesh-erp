@@ -23,6 +23,7 @@ import {
   invoiceSequences,
   invoices,
   invoiceStatusValues,
+  merchants,
   stockMovements,
 } from "@ganesh/db/schema";
 import { requireMerchant } from "@ganesh/server/http/auth-guard";
@@ -211,11 +212,15 @@ async function recalculateInvoice(tx: Tx, invoiceId: string) {
   return totals;
 }
 
-async function loadInvoiceDetail(merchantId: string, id: string) {
+async function loadInvoiceDetail(merchantId: string | null, id: string) {
   const [invoice] = await db
     .select()
     .from(invoices)
-    .where(and(eq(invoices.id, id), eq(invoices.merchantId, merchantId)))
+    .where(
+      merchantId
+        ? and(eq(invoices.id, id), eq(invoices.merchantId, merchantId))
+        : eq(invoices.id, id),
+    )
     .limit(1);
 
   if (!invoice) return null;
@@ -543,6 +548,78 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       );
       if (!invoice) return notFound(reply);
       return invoice;
+    },
+  );
+
+  // ---- Public share -------------------------------------------------------
+
+  /**
+   * Read-only invoice for a shared link (`/invoices/:id?anon=true`).
+   *
+   * The id is an unguessable UUID and the response deliberately omits internal
+   * stock-sync details, catalogue links and the merchant id; only what appears
+   * on the invoice document is returned. Anyone holding the link can read it,
+   * so the UI warns about that before sharing.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/api/public/invoices/:id",
+    async (request, reply) => {
+      const invoice = await loadInvoiceDetail(null, request.params.id);
+      if (!invoice) return notFound(reply);
+
+      const [merchant] = await db
+        .select({ name: merchants.name })
+        .from(merchants)
+        .where(eq(merchants.id, invoice.merchantId))
+        .limit(1);
+
+      return {
+        id: invoice.id,
+        kind: invoice.kind,
+        status: invoice.status,
+        number: invoice.number,
+        financialYear: invoice.financialYear,
+        invoiceDate: invoice.invoiceDate,
+        dueDate: invoice.dueDate,
+        partyName: invoice.partyName,
+        partyPhone: invoice.partyPhone,
+        partyGstin: invoice.partyGstin,
+        partyAddress: invoice.partyAddress,
+        currency: invoice.currency,
+        notes: invoice.notes,
+        subtotal: invoice.subtotal,
+        discountTotal: invoice.discountTotal,
+        taxTotal: invoice.taxTotal,
+        total: invoice.total,
+        issuedAt: invoice.issuedAt,
+        voidedAt: invoice.voidedAt,
+        createdAt: invoice.createdAt,
+        updatedAt: invoice.updatedAt,
+        issuerName: merchant?.name ?? null,
+        lines: invoice.lines.map((line) => ({
+          id: line.id,
+          invoiceId: line.invoiceId,
+          position: line.position,
+          catalogueItemId: null,
+          itemName: line.itemName,
+          sku: line.sku,
+          hsnCode: line.hsnCode,
+          unit: line.unit,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discount: line.discount,
+          taxRate: line.taxRate,
+          lineSubtotal: line.lineSubtotal,
+          lineTaxable: line.lineTaxable,
+          lineTax: line.lineTax,
+          lineTotal: line.lineTotal,
+          stockMovementId: null,
+          stockSyncState: "not_applicable" as const,
+          stockSyncNote: null,
+          lineStatus: line.lineStatus,
+          catalogueItem: null,
+        })),
+      };
     },
   );
 

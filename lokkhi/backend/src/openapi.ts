@@ -301,6 +301,27 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/public/invoices/{id}": {
+      get: {
+        tags: ["Invoices"],
+        summary: "Read a shared invoice without signing in",
+        description:
+          "Powers the `/invoices/{id}?anon=true` page. The invoice id is an unguessable UUID and the response omits merchant ids, catalogue links and stock-sync state. Anyone holding the link can read the document.",
+        security: [],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": {
+            description: "Invoice document, with the issuer name",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Invoice" },
+              },
+            },
+          },
+          "404": { description: "Not found" },
+        },
+      },
+    },
     "/api/merchant/invoices/{id}": {
       get: {
         tags: ["Invoices"],

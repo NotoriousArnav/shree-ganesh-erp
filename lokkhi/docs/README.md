@@ -43,6 +43,7 @@ That means:
 - [Hints and Add to Mushak](user-guide/04-hints-and-adding-to-mushak.md)
 - [Issuing, stock and voiding](user-guide/05-stock-and-issuing.md)
 - [Printing](user-guide/06-printing.md)
+- [Exporting an invoice](user-guide/07-exporting.md)
 
 ### API
 

@@ -136,4 +136,126 @@
   .print-hide {
     display: none !important;
   }
+
+  /*
+   * Invoice document.
+   *
+   * The on-screen table has a min-width and scrolls horizontally, which is
+   * fine in a browser but clips the Total column on paper. In print the table
+   * becomes fixed-width, sized to the printable page, with tighter padding.
+   */
+  .invoice-document {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+  }
+
+  .invoice-header {
+    padding: 0 0 10px !important;
+  }
+
+  .invoice-table-wrap {
+    overflow: visible !important;
+  }
+
+  .invoice-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+    font-size: 9.5pt;
+  }
+
+  .invoice-table th,
+  .invoice-table td {
+    padding: 5px 6px !important;
+    vertical-align: top;
+  }
+
+  .invoice-table th:first-child,
+  .invoice-table td:first-child {
+    padding-left: 0 !important;
+  }
+
+  .invoice-table th:last-child,
+  .invoice-table td:last-child {
+    padding-right: 0 !important;
+  }
+
+  .invoice-table th:nth-child(1) {
+    width: 36%;
+  }
+  .invoice-table th:nth-child(2) {
+    width: 9%;
+  }
+  .invoice-table th:nth-child(3) {
+    width: 14%;
+  }
+  .invoice-table th:nth-child(4) {
+    width: 11%;
+  }
+  .invoice-table th:nth-child(5) {
+    width: 15%;
+  }
+  .invoice-table th:nth-child(6) {
+    width: 15%;
+  }
+
+  .invoice-table td:first-child {
+    overflow-wrap: anywhere;
+  }
+
+  .invoice-table td:nth-child(2),
+  .invoice-table td:nth-child(3),
+  .invoice-table td:nth-child(4),
+  .invoice-table td:nth-child(6) {
+    white-space: nowrap;
+  }
+
+  .invoice-footer {
+    display: flex !important;
+    padding: 10px 0 0 !important;
+  }
+
+  .invoice-footer > div:first-child {
+    max-width: 104mm !important;
+  }
+
+  .invoice-totals {
+    width: 62mm !important;
+    max-width: 62mm !important;
+    margin-left: auto !important;
+  }
+
+  /* The invoice list is not a document, but if it is printed it should not
+     clip or wrap dates and numbers across three lines. */
+  .invoice-list-wrap {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .invoice-list-table {
+    font-size: 9pt;
+  }
+
+  .invoice-list-table th,
+  .invoice-list-table td {
+    padding: 5px 6px !important;
+  }
+
+  .invoice-list-table th:first-child,
+  .invoice-list-table td:first-child {
+    padding-left: 0 !important;
+  }
+
+  .invoice-list-table th:last-child,
+  .invoice-list-table td:last-child {
+    padding-right: 0 !important;
+  }
+
+  .invoice-list-table td:nth-child(1),
+  .invoice-list-table td:nth-child(2) {
+    white-space: nowrap;
+  }
 }

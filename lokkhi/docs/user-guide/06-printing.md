@@ -24,6 +24,13 @@ Choose **Save as PDF** in the print dialog to keep a digital copy.
 
 Hints are for you, not for the customer. The invoice document stays clean.
 
+## Long invoices
+
+The printed table is sized to the page, so the Total column is never cut off.
+When an invoice runs past one page, the column headings repeat at the top of each
+new page and rows are not split across pages. The totals block always appears at
+the end, aligned to the right.
+
 ## Drafts
 
 A draft prints without a number. Issue it first if the customer needs a numbered

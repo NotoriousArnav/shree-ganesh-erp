@@ -212,8 +212,8 @@ export default function InvoiceDetail() {
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-      <article className="overflow-hidden rounded-2xl border border-border bg-card">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5">
+      <article className="invoice-document overflow-hidden rounded-2xl border border-border bg-card">
+        <header className="invoice-header flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
               {invoice.kind === "sale" ? "Sales invoice" : "Purchase invoice"}
@@ -240,8 +240,8 @@ export default function InvoiceDetail() {
           </div>
         </header>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+        <div className="invoice-table-wrap overflow-x-auto">
+          <table className="invoice-table w-full min-w-[720px] text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-6 py-2.5 font-medium">Item</th>
@@ -321,7 +321,7 @@ export default function InvoiceDetail() {
           </table>
         </div>
 
-        <footer className="flex flex-wrap items-start justify-between gap-4 border-t border-border px-6 py-4">
+        <footer className="invoice-footer flex flex-wrap items-start justify-between gap-4 border-t border-border px-6 py-4">
           <div className="max-w-md text-sm text-muted-foreground">
             {invoice.notes ? <p>{invoice.notes}</p> : null}
             <p className="mt-1 text-xs text-muted-foreground/70">
@@ -330,7 +330,7 @@ export default function InvoiceDetail() {
             </p>
           </div>
 
-          <div className="w-full max-w-xs space-y-1 text-sm">
+          <div className="invoice-totals w-full max-w-xs space-y-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Subtotal</span>
               <span className="tabular-nums">

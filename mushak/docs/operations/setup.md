@@ -244,6 +244,15 @@ redirect rules, so the build command substitutes `BACKEND_URL` into the
 `BACKEND_PLACEHOLDER` before redirects are read. Set `FRONTEND_URL`,
 `BETTER_AUTH_URL` and `TRUSTED_ORIGINS` on the backend to the Netlify domain.
 
+### Vercel
+
+`mushak/vercel.json` builds the same frontend on Vercel. Set the project's
+**Root Directory** to `mushak` (Vercel only reads `vercel.json` there), add
+`BACKEND_URL`, and deploy. The build runs from the repository root and publishes
+`frontend/dist`; `/api/*` is rewritten to `${BACKEND_URL}/api/*`. Leaving the
+Root Directory at the repository root builds every workspace and fails with
+`STATIC_BUILD_NO_OUT_DIR`.
+
 Production checklist:
 
 - `NODE_ENV=production`;

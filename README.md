@@ -150,6 +150,23 @@ command substitutes `BACKEND_URL` into the `BACKEND_PLACEHOLDER` in
 `netlify.toml` before the redirects are read. The build fails with a clear
 message if `BACKEND_URL` is missing.
 
+### Vercel (alternative)
+
+`mushak/vercel.json` and `lokkhi/vercel.json` do the same job on Vercel. For
+each Vercel project:
+
+1. Set **Root Directory** to `mushak` or `lokkhi`. Vercel only reads
+   `vercel.json` from the configured root directory; if the root stays at the
+   repository root, Vercel runs the workspace-wide `npm run build` and fails
+   with `STATIC_BUILD_NO_OUT_DIR: No Output Directory named "dist"`.
+2. Add `BACKEND_URL` in **Project Settings → Environment Variables**.
+3. Deploy. The config installs from the repo root, builds the packages and the
+   app, and publishes `frontend/dist`.
+
+`/api/*` is rewritten to `${BACKEND_URL}/api/*` with Vercel's `routes` syntax,
+which supports environment-variable expansion. The browser stays same-origin,
+so the session cookie keeps working.
+
 Schema changes:
 
 ```bash

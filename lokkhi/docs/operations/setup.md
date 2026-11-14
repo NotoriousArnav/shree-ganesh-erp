@@ -72,6 +72,15 @@ rules, so the build command substitutes `BACKEND_URL` into the placeholder
 before redirects are read. Point `FRONTEND_URL`, `BETTER_AUTH_URL` and
 `TRUSTED_ORIGINS` on the backend at the Netlify domain.
 
+### Vercel
+
+`lokkhi/vercel.json` builds the same frontend on Vercel. Set the project's
+**Root Directory** to `lokkhi` (Vercel only reads `vercel.json` there), add
+`BACKEND_URL`, and deploy. The build runs from the repository root and publishes
+`frontend/dist`; `/api/*` is rewritten to `${BACKEND_URL}/api/*`. Leaving the
+Root Directory at the repository root builds every workspace and fails with
+`STATIC_BUILD_NO_OUT_DIR`.
+
 ## Packages
 
 Lokkhi imports three workspace packages:

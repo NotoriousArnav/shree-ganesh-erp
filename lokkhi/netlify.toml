@@ -1,0 +1,35 @@
+# Lokkhi frontend on Netlify.
+#
+# Project settings:
+#   Base directory:    (repository root, leave empty)
+#   Package directory: lokkhi
+#   Environment:       BACKEND_URL = https://api.lokkhi.example.com
+#
+# Netlify installs dependencies at the base directory, where the workspace
+# lockfile lives. Netlify cannot read environment variables in [[redirects]],
+# so the build substitutes BACKEND_URL into the placeholder below, as described
+# in Netlify's file-based configuration docs.
+
+[build]
+  command = "sed -i \"s|BACKEND_PLACEHOLDER|${BACKEND_URL:?Set BACKEND_URL in Netlify build settings}|g\" lokkhi/netlify.toml && npm run build:packages && npm run build -w lokkhi/frontend"
+  publish = "lokkhi/frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/api/*"
+  to = "BACKEND_PLACEHOLDER/api/:splat"
+  status = 200
+  force = true
+
+# Client-side router: every unknown path renders the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

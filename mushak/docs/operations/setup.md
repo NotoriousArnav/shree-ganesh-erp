@@ -228,6 +228,22 @@ one origin and proxy `/api`, `/health`, `/openapi.json`, `/docs` and `/mcp` to
 the backend. Set the environment through the process manager, not a committed
 file.
 
+### Netlify
+
+`mushak/netlify.toml` builds the frontend on Netlify:
+
+1. Leave **Base directory** empty and set **Package directory** to `mushak`.
+2. Set `BACKEND_URL` to the backend origin, e.g. `https://api.mushak.example.com`
+   (no trailing slash).
+3. Deploy; the output is `mushak/frontend/dist`.
+
+The config proxies `/api/*` to `${BACKEND_URL}/api/*`, so the browser talks
+only to the Netlify origin and the session cookie stays same-origin. Other
+paths fall back to `index.html`. Netlify cannot read environment variables in
+redirect rules, so the build command substitutes `BACKEND_URL` into the
+`BACKEND_PLACEHOLDER` before redirects are read. Set `FRONTEND_URL`,
+`BETTER_AUTH_URL` and `TRUSTED_ORIGINS` on the backend to the Netlify domain.
+
 Production checklist:
 
 - `NODE_ENV=production`;

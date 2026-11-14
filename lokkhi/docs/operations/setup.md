@@ -57,6 +57,21 @@ The frontend never calls Mushak directly. It only talks to the Lokkhi backend,
 which reads the shared database itself. That keeps CORS simple and means a Mushak
 outage only disables suggestions, not invoicing.
 
+### Netlify
+
+`lokkhi/netlify.toml` builds the frontend on Netlify:
+
+1. Leave **Base directory** empty and set **Package directory** to `lokkhi`.
+2. Set `BACKEND_URL` to the Lokkhi backend origin, without a trailing slash.
+3. Deploy; the output is `lokkhi/frontend/dist`.
+
+The config proxies `/api/*` to `${BACKEND_URL}/api/*`, so the browser only talks
+to the Netlify origin and the session cookie stays same-origin. Unknown paths
+fall back to `index.html`. Netlify cannot read environment variables in redirect
+rules, so the build command substitutes `BACKEND_URL` into the placeholder
+before redirects are read. Point `FRONTEND_URL`, `BETTER_AUTH_URL` and
+`TRUSTED_ORIGINS` on the backend at the Netlify domain.
+
 ## Packages
 
 Lokkhi imports three workspace packages:

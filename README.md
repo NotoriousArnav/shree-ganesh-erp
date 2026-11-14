@@ -125,6 +125,31 @@ For a real deployment, put the built `dist/` behind a web server or CDN and
 proxy `/api` to the backend; `vite preview` is for verification and LAN use.
 Use different `PORT` values if both run on one host.
 
+## Deploying the frontends on Netlify
+
+`mushak/netlify.toml` and `lokkhi/netlify.toml` deploy one app each. Create two
+sites from this repository and use the same settings for both:
+
+1. Leave **Base directory** empty (the repository root) and set **Package
+   directory** to `mushak` for one site and `lokkhi` for the other. Dependencies
+   are installed at the root, where the workspace lockfile lives.
+2. Add a `BACKEND_URL` environment variable in each site, for example
+   `https://api.mushak.example.com` (no trailing slash).
+3. Deploy. The command builds the shared packages and the app, then publishes
+   `<app>/frontend/dist`.
+4. On the backend set `FRONTEND_URL`, `BETTER_AUTH_URL` and `TRUSTED_ORIGINS`
+   to the real Netlify domains.
+
+Requests to `/api/*` are proxied to `${BACKEND_URL}/api/*` by Netlify's CDN.
+The browser stays on the Netlify origin, so the session cookie keeps working
+and no CORS or `SameSite` change is needed. Unknown paths fall back to
+`index.html` for the client-side router.
+
+Netlify does not expand environment variables in redirect rules, so the build
+command substitutes `BACKEND_URL` into the `BACKEND_PLACEHOLDER` in
+`netlify.toml` before the redirects are read. The build fails with a clear
+message if `BACKEND_URL` is missing.
+
 Schema changes:
 
 ```bash

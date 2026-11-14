@@ -139,11 +139,11 @@ npm run dev:mushak
 Vite proxies `/api` to `localhost:8080`, so the browser sees one origin in
 development.
 
-Run the halves separately when needed:
+Run a single half when needed:
 
 ```bash
-npm run dev:frontend
-npm run dev:backend
+npm run dev -w mushak/frontend   # web only
+npm run dev -w mushak/backend    # API only
 ```
 
 ## 8. Sign in

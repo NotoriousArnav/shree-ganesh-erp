@@ -13,10 +13,16 @@
   "scripts": {
     "build:packages": "npm run build -w packages/db && npm run build -w packages/shared && npm run build -w packages/server",
     "build": "npm run build:packages && npm run build:mushak && npm run build:lokkhi",
-    "dev:mushak": "concurrently -k -n web,api -c cyan,magenta \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev:mushak": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w mushak/frontend\" \"npm run dev -w mushak/backend\"",
     "build:mushak": "npm run build -w mushak/frontend -w mushak/backend",
     "dev:lokkhi": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w lokkhi/frontend\" \"npm run dev -w lokkhi/backend\"",
     "build:lokkhi": "npm run build -w lokkhi/frontend -w lokkhi/backend",
+    "test": "node --import tsx --test \"mushak/**/*.test.ts\" \"lokkhi/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
+    "test:mushak": "node --import tsx --test \"mushak/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
+    "test:lokkhi": "node --import tsx --test \"lokkhi/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
+    "test:watch": "node --import tsx --test --watch \"mushak/**/*.test.ts\" \"lokkhi/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
+    "prod-env:mushak": "DOTENV_CONFIG_PATH=.env.production npm run start -w mushak/backend",
+    "prod-env:lokkhi": "DOTENV_CONFIG_PATH=.env.production npm run start -w lokkhi/backend",
     "db:up": "npm run db:up -w mushak/backend",
     "db:down": "npm run db:down -w mushak/backend",
     "db:migrate": "npm run db:migrate -w mushak/backend",
@@ -32,6 +38,8 @@
   },
   "devDependencies": {
     "concurrently": "^10.0.7",
-    "drizzle-orm": "^0.45.4"
+    "drizzle-orm": "^0.45.4",
+    "tsx": "^4.23.15",
+    "vite": "^5.4.21"
   }
 }

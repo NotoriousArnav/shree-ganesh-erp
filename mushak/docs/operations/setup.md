@@ -197,6 +197,10 @@ roles or shop links, which have no UI.
 | `npm run mail:test` | Send a sample message through the configured transport |
 | `npm run build` | Build the frontend and backend |
 | `npm run dev:mushak` | Run both dev servers |
+| `npm test` | Run all unit tests |
+| `npm run test:mushak` | Run Mushak and shared tests |
+| `npm run test:lokkhi` | Run Lokkhi and shared tests |
+| `npm run prod-env:mushak` | Start the built backend with `.env.production` |
 
 ## Production build
 

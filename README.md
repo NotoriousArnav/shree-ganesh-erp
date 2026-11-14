@@ -95,6 +95,32 @@ Scripts:
 | `npm run db:migrate` | Apply generated migrations |
 | `npm run db:studio` | Open Drizzle Studio |
 
+## Tests
+
+Unit tests use Node's built-in test runner through `tsx`:
+
+```bash
+npm test             # everything
+npm run test:mushak  # Mushak frontend + shared packages
+npm run test:lokkhi  # Lokkhi frontend + shared packages
+npm run test:watch   # re-run on change
+```
+
+Test files sit next to the code they cover as `*.test.ts`.
+
+## Production environment
+
+Both backends read `.env.production` when started with the `prod-env:*` scripts:
+
+```bash
+npm run build
+npm run prod-env:mushak   # built Mushak backend on $PORT
+npm run prod-env:lokkhi   # built Lokkhi backend on $PORT
+```
+
+Set `DOTENV_CONFIG_PATH=.env.production` to point a one-off command at the same
+file. Use different `PORT` values if both run on one host.
+
 Schema changes:
 
 ```bash

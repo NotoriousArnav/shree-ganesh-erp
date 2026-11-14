@@ -6,6 +6,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
+import { homePathForRole } from "@/lib/roles";
 
 /** Accepts 9876543210, +919876543210, or a spaced version of either. */
 function normalizePhone(value: string) {
@@ -69,10 +70,8 @@ export default function Login() {
       }
 
       const role = result.data?.user.role;
-      const home =
-        role === "super_admin" || role === "dev" ? "/admin" : "/app";
 
-      navigate(redirectTo ?? home, { replace: true });
+      navigate(redirectTo ?? homePathForRole(role), { replace: true });
     } catch {
       setError("Could not reach the server. Try again.");
     } finally {

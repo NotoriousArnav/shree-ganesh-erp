@@ -7,6 +7,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import { client, db } from "@ganesh/db";
 import { closeMailer } from "@ganesh/server/mail";
+import { registerCors } from "@ganesh/server/http/cors";
 import { createMcpServer } from "./mcp.js";
 import { openapiSpec } from "./openapi.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
@@ -27,6 +28,7 @@ app.register(swagger, {
 app.register(swaggerUi, {
   routePrefix: "/docs",
 });
+await registerCors(app);
 
 app.get("/health", async () => ({
   status: "ok",

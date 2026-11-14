@@ -1670,13 +1670,57 @@ export const openapiSpec: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/storage/uploads": {
+      post: {
+        tags: ["Storage"],
+        operationId: "uploadThroughApi",
+        summary: "Upload image bytes through the API",
+        description:
+          "Requires the catalogue permission. Body must be application/octet-stream, maximum 25 MB. " +
+          "The API builds the tenant-scoped key and writes the object, so browsers never need bucket CORS.",
+        parameters: [
+          {
+            name: "filename",
+            in: "query",
+            required: true,
+            schema: { type: "string", maxLength: 200 },
+          },
+          {
+            name: "contentType",
+            in: "query",
+            schema: { type: "string", maxLength: 200 },
+          },
+          {
+            name: "prefix",
+            in: "query",
+            schema: { type: "string", maxLength: 200, example: "products" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
+        responses: {
+          "201": jsonResponse("Stored object metadata", ref("StoredObject")),
+          "400": errorResponse("Invalid query"),
+          ...errorResponses,
+          "415": errorResponse("Body was not application/octet-stream"),
+          "503": errorResponse("Storage is not configured"),
+        },
+      },
+    },
     "/api/storage/presign-upload": {
       post: {
         tags: ["Storage"],
         operationId: "presignUpload",
         summary: "Create a presigned upload URL",
         description:
-          "Requires the catalogue permission. Returns a PUT URL for the tenant-scoped key.",
+          "Requires the catalogue permission. Returns a PUT URL for the tenant-scoped key. " +
+          "Intended for scripts and non-browser clients; browser clients should use /api/storage/uploads.",
         requestBody: jsonBody({
           type: "object",
           required: ["filename"],

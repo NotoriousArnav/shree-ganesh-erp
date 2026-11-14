@@ -50,9 +50,11 @@ In development Vite proxies `/api` to `http://localhost:8080`.
 - In production, does the web server proxy `/api`, `/health`, `/openapi.json`,
   `/docs` and `/mcp` to the backend?
 
-A browser CORS error means the request is going cross-origin. The auth layer
-only trusts configured origins. Add the frontend origin to `TRUSTED_ORIGINS`
-and restart.
+A browser CORS error means the API did not answer the preflight. The API
+reflects any origin and allows credentials, so check that a reverse proxy
+forwards `OPTIONS` requests and the `Origin` header. If the request reaches
+Better Auth and is rejected as an invalid origin, add the frontend origin to
+`TRUSTED_ORIGINS` and restart.
 
 ## Sign-in loops or 401s
 
@@ -112,7 +114,7 @@ Review the generated SQL before applying it.
 | --- | --- |
 | 503 “Object storage is not configured” | `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
 | `/health/storage` 503 | Container health, endpoint, credentials |
-| Upload 403 from the browser | Bucket CORS; restart after changing origins |
+| Upload 403 from the browser | Missing `catalogue` permission or signed-out session; bucket CORS is not involved |
 | `SignatureDoesNotMatch` | Secret, region, path-style setting, clock skew |
 | Missing images | Object deleted; restore the bucket backup |
 | Bucket does not exist | The driver creates it on first use; check IAM rights |

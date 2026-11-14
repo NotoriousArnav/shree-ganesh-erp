@@ -5,6 +5,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { sql } from "drizzle-orm";
 
 import { client, db } from "@ganesh/db";
+import { registerCors } from "@ganesh/server/http/cors";
 import { registerAuthRoutes } from "@ganesh/server/routes/auth-routes";
 import { closeMailer } from "@ganesh/server/mail";
 
@@ -15,6 +16,7 @@ const app = Fastify({ logger: true });
 
 app.register(swagger, { openapi: openapiSpec });
 app.register(swaggerUi, { routePrefix: "/docs" });
+await registerCors(app);
 
 app.get("/health", async () => ({ status: "ok", app: "lokkhi" }));
 

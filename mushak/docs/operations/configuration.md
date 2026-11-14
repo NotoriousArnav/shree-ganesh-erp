@@ -35,7 +35,7 @@ different `DATABASE_URL`.
 | --- | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | none | Yes in practice | 32 random bytes, base64url. Changing it invalidates every session. |
 | `BETTER_AUTH_URL` | `http://localhost:8080` | Yes | Public backend origin; used as the auth base URL. |
-| `FRONTEND_URL` | `http://localhost:5173` | Yes | Public frontend origin; trusted for auth and storage CORS. |
+| `FRONTEND_URL` | `http://localhost:5173` | Yes | Public frontend origin; trusted for auth. |
 | `TRUSTED_ORIGINS` | empty | For extra origins | Comma-separated list, e.g. `https://shop.example.com,http://192.168.1.42:5173`. `*` trusts every origin. |
 
 Origins are normalised without a trailing slash. Development accepts every
@@ -85,7 +85,7 @@ See [Mail](mail.md).
 | `S3_SECRET_KEY` | none | Yes | Bucket secret. |
 | `S3_BUCKET` | none | Yes | Bucket name; created on first use. |
 | `S3_FORCE_PATH_STYLE` | `true` | No | Path-style addressing; required by RustFS and MinIO, optional for AWS. Set `false` for virtual-host style. |
-| `S3_PUBLIC_URL` | none | No | CDN or public bucket base for permanent links. Without it, presigned URLs are used. |
+| `S3_PUBLIC_URL` | none | No | CDN or public bucket base for permanent links. Leave empty for private buckets; images then stream through the authenticated API. |
 | `S3_PORT` | `9000` | Compose only | Host port for RustFS. |
 | `S3_CONSOLE_PORT` | `9001` | Compose only | Host port for the RustFS console. |
 

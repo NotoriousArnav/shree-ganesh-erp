@@ -10,6 +10,7 @@ policy serve files later.
 | --- | --- |
 | RustFS | Bundled in `docker-compose.yml`; development default |
 | MinIO | Works with `S3_ENDPOINT` and path-style addressing |
+| Backblaze B2 | Works with the regional `s3.<region>.backblazeb2.com` endpoint; private buckets are fine |
 | AWS S3 | Omit `S3_ENDPOINT`; usually `S3_FORCE_PATH_STYLE=false` |
 | Ceph RGW and other S3 APIs | Works when path-style and signature settings match |
 
@@ -31,8 +32,7 @@ S3_FORCE_PATH_STYLE=true
 Start the bundled server with `npm run db:up`. The console is at
 http://localhost:9001.
 
-The bucket named by `S3_BUCKET` is created on first use. The driver also writes
-a CORS policy from the trusted origins so browser uploads work.
+The bucket named by `S3_BUCKET` is created on first use.
 
 ## Key layout
 
@@ -50,7 +50,7 @@ Examples:
 0c8a…/inventory/2026-11/77de…-pack.jpg
 ```
 
-- The folder comes from the `prefix` field on the presign request and is
+- The folder comes from the `prefix` parameter on the upload request and is
   sanitised; slashes become nested folders.
 - The UI uses `products` for catalogue images, `profile` for the shop picture,
   and `inventory` for stock images.
@@ -64,22 +64,21 @@ current UI always renders images through the authenticated content endpoint.
 
 ```
 Browser                    API                        Object storage
-  │  POST presign-upload     │                              │
+  │  POST uploads (bytes)    │                              │
   ├─────────────────────────►│  build tenant key            │
-  │                          ├─────────────────────────────►│  sign PUT
-  │  { key, url, headers }   │                              │
+  │                          ├─────────────────────────────►│  store
+  │  { key, size, etag }     │                              │
   │◄─────────────────────────┤                              │
-  │  PUT bytes to url        │                              │
-  ├─────────────────────────────────────────────────────────►│  store
   │  PATCH product { imageKey: key }                        │
   ├─────────────────────────►│  validate prefix, save key   │
 ```
 
-The API never sees the image bytes in this flow. The bytes go straight from the
-browser to the bucket.
+Browser uploads pass through the API, so the bucket never sees a browser
+request and needs no CORS policy. The 5 MB image limit keeps the extra hop
+cheap.
 
-The direct `PUT /api/storage/objects` path exists for scripts and server-to-server
-uploads; it streams through Fastify and is limited to 25 MB.
+Scripts and non-browser clients can still ask for a presigned PUT, or use the
+direct `PUT /api/storage/objects` path. Both are limited to 25 MB.
 
 ## Browser limits
 
@@ -89,7 +88,7 @@ The image component accepts:
 | --- | --- |
 | Types | `image/png`, `image/jpeg`, `image/webp`, `image/gif`, `image/avif` |
 | Maximum size | 5 MB |
-| Upload | Presigned PUT, then save the key |
+| Upload | `POST /api/storage/uploads`, then save the key |
 
 The server does not inspect image contents; the browser type and size checks are
 a usability guard. Treat uploaded files as untrusted if you later process them.
@@ -108,21 +107,12 @@ URL per render.
 
 ## CORS
 
-Browser uploads PUT directly to the bucket, so the bucket must allow the
-frontend origin. The driver writes the policy from the same trusted-origin list
-as auth:
+None is required. The browser only calls the Mushak API, and the API writes and
+reads objects with server-side credentials. This works with private buckets,
+including Backblaze B2 and the RustFS/MinIO defaults.
 
-- `FRONTEND_URL`;
-- `BETTER_AUTH_URL`;
-- `TRUSTED_ORIGINS`;
-- LAN IPv4 origins in development.
-
-If you change the frontend origin, restart the backend so the policy is
-rewritten, and clear the browser cache if a failed preflight is cached.
-
-RustFS in the bundled compose file also sets
-`RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS=*`; that is for the console, not for
-presigned uploads.
+CORS is still enabled on the API itself so browser apps on other origins can
+call it. That is an API policy, separate from the bucket.
 
 ## AWS S3 example
 
@@ -140,11 +130,9 @@ The IAM user needs at least:
 
 - `s3:ListBucket` on the bucket;
 - `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on `bucket/*`;
-- bucket creation if the bucket does not exist (`s3:CreateBucket`,
-  `s3:PutBucketCORS`).
+- bucket creation if the bucket does not exist (`s3:CreateBucket`).
 
-If the bucket is created outside Mushak, apply a CORS policy that allows `PUT`
-and `GET` from the frontend origin with the `content-type` header.
+No bucket CORS permission is needed.
 
 ## Tenancy and safety
 
@@ -174,7 +162,7 @@ pictures are gone.
 | Symptom | Check |
 | --- | --- |
 | `/health/storage` is 503 | `S3_BUCKET`, keys, endpoint, container |
-| Upload works in API but not browser | Bucket CORS and the frontend origin |
+| Upload works in API but not browser | API CORS or the signed-in session; bucket CORS is not involved |
 | `403 SignatureDoesNotMatch` | Wrong secret, region or path-style setting |
 | Images show a broken tile | Missing object, wrong key, or storage is down |
 | Bucket is created but listing is empty | The prefix is relative to the merchant prefix |

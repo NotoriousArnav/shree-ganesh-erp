@@ -36,13 +36,21 @@ const uploadPrefixQuery = z.object({
   contentType: z.string().trim().max(200).optional(),
 });
 
+const uploadQuery = z.object({
+  /** Original file name; used to build a readable key. */
+  filename: z.string().trim().min(1).max(200),
+  contentType: z.string().trim().max(200).optional(),
+  /** Optional folder inside the merchant's own prefix, e.g. "products". */
+  prefix: z.string().trim().max(200).optional(),
+});
+
 /**
  * Storage controller.
  *
  * Keys are always tenant-scoped: a merchant may only sign, read or delete
- * objects under its own `${merchantId}/` prefix. Uploads use presigned PUT URLs
- * so file bytes never pass through the API server; `PUT /api/storage/objects`
- * exists for scripts and server-to-server uploads.
+ * objects under its own `${merchantId}/` prefix. Browser uploads go through
+ * `POST /api/storage/uploads`, so the bucket never needs a CORS policy.
+ * Presigned PUTs remain available for scripts and non-browser clients.
  */
 export async function registerStorageRoutes(app: FastifyInstance) {
   app.addContentTypeParser(
@@ -80,17 +88,59 @@ export async function registerStorageRoutes(app: FastifyInstance) {
       }
 
       const access = request.merchantAccess!;
-      const folder = input.data.prefix
-        ? `${safeSegment(input.data.prefix)}/`
-        : "";
-      const key = `${merchantPrefix(access.merchantId)}${folder}${dateFolder()}/${randomUUID()}-${slugify(
+      const key = objectKey(
+        access.merchantId,
+        input.data.prefix,
         input.data.filename,
-      )}`;
+      );
 
       return getStorage().presignUpload(key, {
         contentType: input.data.contentType,
         expiresIn: input.data.expiresIn,
       });
+    },
+  );
+
+  /**
+   * Uploads bytes through the API instead of a presigned PUT.
+   *
+   * Browser clients use this path so object storage never needs a CORS policy;
+   * the browser only talks to the API it already trusts. The bytes cost one
+   * hop through the backend, which is fine for the 5 MB image limit.
+   */
+  app.post(
+    "/api/storage/uploads",
+    { preHandler: requirePermission("catalogue") },
+    async (request, reply) => {
+      if (!requireStorage(reply)) return reply;
+
+      const query = uploadQuery.safeParse(request.query);
+      if (!query.success) {
+        return reply.code(400).send({ error: query.error.issues[0]?.message });
+      }
+
+      const body = request.body;
+      if (!Buffer.isBuffer(body)) {
+        return reply.code(415).send({
+          error: "Send the file as application/octet-stream.",
+        });
+      }
+
+      const access = request.merchantAccess!;
+      const key = objectKey(
+        access.merchantId,
+        query.data.prefix,
+        query.data.filename,
+      );
+
+      const object = await getStorage().put(key, body, {
+        contentType:
+          query.data.contentType ??
+          request.headers["content-type"] ??
+          undefined,
+      });
+
+      return reply.code(201).send(object);
     },
   );
 
@@ -226,6 +276,19 @@ export async function registerStorageRoutes(app: FastifyInstance) {
 
 function merchantPrefix(merchantId: string): string {
   return `${merchantId}/`;
+}
+
+/** Tenant-scoped key with an optional folder, month and random file name. */
+function objectKey(
+  merchantId: string,
+  prefix: string | undefined,
+  filename: string,
+): string {
+  const folder = prefix ? `${safeSegment(prefix)}/` : "";
+
+  return `${merchantPrefix(merchantId)}${folder}${dateFolder()}/${randomUUID()}-${slugify(
+    filename,
+  )}`;
 }
 
 /**

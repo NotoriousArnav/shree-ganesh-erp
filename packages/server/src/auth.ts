@@ -55,10 +55,7 @@ const merchantRole = ac.newRole({ user: [], session: [] });
 const staffRole = ac.newRole({ user: [], session: [] });
 
 /**
- * Origins allowed to call the auth API.
- *
- * Kept in one place so the object-storage CORS policy matches: browser uploads
- * PUT directly to the bucket. See `http/origins.ts`.
+ * Origins allowed to call the auth API. See `http/origins.ts`.
  */
 
 export const auth = betterAuth({

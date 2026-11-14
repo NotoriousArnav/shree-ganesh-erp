@@ -149,7 +149,7 @@ take effect on the next profile load; reload the page if the sidebar is stale.
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Upload button reports a network error | Object storage is down or unreachable | Check `/health/storage` and the RustFS container. |
-| Browser blocks the upload with a CORS message | The frontend origin is not in the bucket CORS policy | Add the origin to `TRUSTED_ORIGINS` and restart the backend; the policy is rewritten on first use. |
+| Browser blocks the upload with a CORS message | The API CORS preflight failed, usually because a proxy strips headers | Call `/api/storage/uploads` from the same origin, or check the proxy passes `OPTIONS` through. Bucket CORS is not involved. |
 | “Storage is not configured” | `S3_BUCKET` or credentials are missing | Fill in the storage variables and restart. |
 | “The image key must stay inside the merchant's own storage prefix” | A key from another shop or a hand-edited form | Re-upload the image from this shop's form. |
 | 413 or “file too large” | The UI accepts images up to 5 MB; the direct API path allows 25 MB | Use a smaller file. |
@@ -173,7 +173,8 @@ A phone on the same Wi-Fi opens `http://<laptop-lan-ip>:5173`.
 
 - The firewall must allow the Vite port and the backend port.
 - In development the backend trusts the machine's LAN addresses automatically.
-- A deployed frontend on another host needs `TRUSTED_ORIGINS` and bucket CORS.
+- A deployed frontend on another host needs `TRUSTED_ORIGINS`; the API already
+  allows browser clients on any origin.
 - `localhost` on the phone means the phone itself, not the laptop.
 
 ## The installed app shows an old version

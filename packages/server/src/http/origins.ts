@@ -1,15 +1,12 @@
 import { networkInterfaces } from "node:os";
 
 /**
- * Origins allowed to call the auth API and upload straight to object storage.
+ * Origins allowed to call the auth API.
  *
  * `FRONTEND_URL` and `BETTER_AUTH_URL` cover the usual case, `TRUSTED_ORIGINS`
  * (comma-separated) covers extra deployments, and in development every LAN
  * address of this machine is added so a phone on the same Wi-Fi can sign in
  * without editing .env whenever the router hands out a new IP.
- *
- * The storage bucket gets the same list as its CORS policy, because browser
- * uploads PUT directly to the object store.
  */
 export function buildTrustedOrigins(): string[] {
   const frontend = new URL(process.env.FRONTEND_URL ?? "http://localhost:5173");
@@ -50,9 +47,6 @@ export function buildTrustedOrigins(): string[] {
  * `http://laptop.local:5173`, a tunnel, or a container hostname never trips
  * "Invalid origin". Production keeps the explicit list built by
  * `buildTrustedOrigins()` unless `TRUSTED_ORIGINS` contains `*`.
- *
- * The storage CORS policy keeps using `buildTrustedOrigins()`: S3 needs concrete
- * origins, and presigned uploads do not send credentials.
  */
 export function buildAuthTrustedOrigins(): string[] {
   const origins = buildTrustedOrigins();

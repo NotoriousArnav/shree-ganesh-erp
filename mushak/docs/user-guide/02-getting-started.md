@@ -73,9 +73,9 @@ trusts every origin, so LAN addresses, mDNS names and tunnels all work without
 changes.
 
 For a deployed frontend, add its origin to `TRUSTED_ORIGINS` in the backend
-environment; production only accepts the configured origins. Also allow that
-origin in the storage bucket; the backend writes the bucket CORS policy on first
-use.
+environment; production only accepts the configured origins. Object storage
+needs no bucket CORS: image uploads go through the API, and the API itself
+accepts browser clients on any origin.
 
 The origin is the scheme, host and port shown in the address bar.
 `http://localhost:5173` and `http://127.0.0.1:5173` are different origins. If

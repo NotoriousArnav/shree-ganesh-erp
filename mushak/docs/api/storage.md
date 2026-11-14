@@ -9,6 +9,7 @@ under its own `<merchantId>/` prefix.
 | Operation | Path | Permission |
 | --- | --- | --- |
 | Status | `GET /api/storage/status` | Any shop role |
+| Upload | `POST /api/storage/uploads` | `catalogue` |
 | Presign upload | `POST /api/storage/presign-upload` | `catalogue` |
 | Presign download | `GET /api/storage/presign-download` | Any shop role |
 | List objects | `GET /api/storage/objects` | Any shop role |
@@ -42,7 +43,36 @@ curl -s -b /tmp/mushak.cookies \
   http://localhost:8080/api/storage/status
 ```
 
+## Upload through the API
+
+`POST /api/storage/uploads?filename=…&contentType=…&prefix=…`
+
+The browser uses this path. The API builds the tenant-scoped key, writes the
+object with server-side credentials, and returns its metadata. No bucket CORS
+policy is involved, so private buckets such as Backblaze B2 work unchanged.
+
+| Query | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `filename` | string | Yes | 1 to 200 characters |
+| `contentType` | string | No | Max 200; stored as the object's content type |
+| `prefix` | string | No | Folder under the merchant prefix, e.g. `products` |
+
+The body must be `application/octet-stream`, up to 25 MB.
+
+```bash
+curl -s -b /tmp/mushak.cookies -X POST \
+  -H 'content-type: application/octet-stream' \
+  --data-binary @rice.jpg \
+  'http://localhost:8080/api/storage/uploads?filename=rice.jpg&contentType=image/jpeg&prefix=products'
+```
+
+Returns `201` with `{ key, size, contentType, etag }`. Save the `key` on the
+product or merchant record.
+
 ## Presign an upload
+
+For scripts and non-browser clients. Browser apps should use
+`POST /api/storage/uploads` above.
 
 `POST /api/storage/presign-upload`
 
@@ -91,8 +121,9 @@ curl -s -b /tmp/mushak.cookies -X PATCH \
   http://localhost:8080/api/merchant/catalogue/<catalogueId>
 ```
 
-The browser does the same PUT. CORS on the bucket must allow the frontend
-origin; the driver writes that policy on first use from `TRUSTED_ORIGINS`.
+The browser does not use this flow. Direct bucket uploads would need a bucket
+CORS policy, which the bundled frontend avoids by posting through
+`/api/storage/uploads`.
 
 ## Presign a download
 
@@ -155,8 +186,9 @@ curl -s -b /tmp/mushak.cookies \
 
 `PUT /api/storage/objects?key=…`
 
-For scripts and server-to-server uploads. Unlike the presigned flow, the bytes
-pass through the API.
+For scripts and server-to-server uploads that already know the key. The bytes
+pass through the API. Most clients should use `POST /api/storage/uploads`
+instead, which builds the key for them.
 
 - body must be `application/octet-stream`;
 - body limit is 25 MB;

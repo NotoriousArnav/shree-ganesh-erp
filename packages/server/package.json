@@ -19,6 +19,10 @@
       "types": "./dist/http/origins.d.ts",
       "default": "./dist/http/origins.js"
     },
+    "./http/cors": {
+      "types": "./dist/http/cors.d.ts",
+      "default": "./dist/http/cors.js"
+    },
     "./http/pg-errors": {
       "types": "./dist/http/pg-errors.d.ts",
       "default": "./dist/http/pg-errors.js"
@@ -36,6 +40,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/cors": "^11.4.3",
     "@ganesh/db": "0.0.0",
     "better-auth": "^1.7.18",
     "drizzle-orm": "^0.45.4",

@@ -4233,6 +4233,117 @@
         }
       }
     },
+    "/api/storage/uploads": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "operationId": "uploadThroughApi",
+        "summary": "Upload image bytes through the API",
+        "description": "Requires the catalogue permission. Body must be application/octet-stream, maximum 25 MB. The API builds the tenant-scoped key and writes the object, so browsers never need bucket CORS.",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "contentType",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "example": "products"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stored object metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, session expired, or account deactivated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Signed in but missing the role or permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Body was not application/octet-stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/storage/presign-upload": {
       "post": {
         "tags": [
@@ -4240,7 +4351,7 @@
         ],
         "operationId": "presignUpload",
         "summary": "Create a presigned upload URL",
-        "description": "Requires the catalogue permission. Returns a PUT URL for the tenant-scoped key.",
+        "description": "Requires the catalogue permission. Returns a PUT URL for the tenant-scoped key. Intended for scripts and non-browser clients; browser clients should use /api/storage/uploads.",
         "requestBody": {
           "required": true,
           "content": {

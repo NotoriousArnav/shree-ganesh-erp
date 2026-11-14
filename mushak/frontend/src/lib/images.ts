@@ -1,16 +1,14 @@
-import { api } from "@/lib/api";
-
 /** Same-origin URL for an object-storage image, or null when unset. */
 export function imageSrc(key: string | null | undefined): string | null {
   if (!key) return null;
   return `/api/storage/objects/content?key=${encodeURIComponent(key)}`;
 }
 
-type PresignedUpload = {
+type StoredObject = {
   key: string;
-  url: string;
-  method: "PUT";
-  headers: Record<string, string>;
+  size: number;
+  contentType?: string;
+  etag?: string;
 };
 
 const allowedTypes = [
@@ -24,10 +22,10 @@ const allowedTypes = [
 const maxBytes = 5 * 1024 * 1024;
 
 /**
- * Uploads an image straight to object storage and returns its key.
+ * Uploads an image through the API and returns its key.
  *
- * The API only signs the PUT, so bytes never pass through the backend. Save the
- * returned key on the product or merchant record.
+ * The browser never talks to object storage directly, so the bucket needs no
+ * CORS policy. Save the returned key on the product or merchant record.
  */
 export async function uploadImage(
   file: File,
@@ -41,24 +39,34 @@ export async function uploadImage(
     throw new Error("Keep the image under 5 MB.");
   }
 
-  const presigned = await api<PresignedUpload>("/api/storage/presign-upload", {
-    method: "POST",
-    body: {
-      filename: file.name,
-      contentType: file.type,
-      prefix,
-    },
+  const params = new URLSearchParams({
+    filename: file.name,
+    contentType: file.type,
+    prefix,
   });
 
-  const response = await fetch(presigned.url, {
-    method: presigned.method,
-    headers: presigned.headers,
+  const response = await fetch(`/api/storage/uploads?${params}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/octet-stream" },
     body: file,
   });
 
   if (!response.ok) {
-    throw new Error("The image upload failed. Try again.");
+    let message = "The image upload failed. Try again.";
+    try {
+      const payload = (await response.json()) as { error?: unknown };
+      if (payload.error) message = String(payload.error);
+    } catch {
+      // Non-JSON error body; keep the generic message.
+    }
+    throw new Error(message);
   }
 
-  return presigned.key;
+  const object = (await response.json()) as StoredObject;
+  if (!object.key) {
+    throw new Error("The upload finished without a storage key.");
+  }
+
+  return object.key;
 }

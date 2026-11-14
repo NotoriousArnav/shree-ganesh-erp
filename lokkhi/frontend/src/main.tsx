@@ -3,11 +3,13 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useSearchParams } from "react-router";
 
 import AppShell from "@/components/AppShell";
+import ForgotPassword from "@/routes/ForgotPassword";
 import InvoiceDetail from "@/routes/InvoiceDetail";
 import InvoiceEditor from "@/routes/InvoiceEditor";
 import InvoiceList from "@/routes/InvoiceList";
 import Login from "@/routes/Login";
 import PublicInvoice from "@/routes/PublicInvoice";
+import ResetPassword from "@/routes/ResetPassword";
 import { startThemeWatcher } from "@/lib/theme";
 import "./index.css";
 
@@ -34,6 +36,8 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/"
           element={

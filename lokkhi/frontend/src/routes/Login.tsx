@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import ThemeToggle from "@/components/theme-toggle";
@@ -104,6 +104,15 @@ export default function Login() {
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+
+          <p className="text-center text-xs text-muted-foreground/80">
+            <Link
+              to="/forgot-password"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Forgot password?
+            </Link>
+          </p>
 
           <p className="text-center text-xs text-muted-foreground/80">
             Uses the same account as Mushak.

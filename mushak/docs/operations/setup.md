@@ -200,7 +200,7 @@ roles or shop links, which have no UI.
 | `npm test` | Run all unit tests |
 | `npm run test:mushak` | Run Mushak and shared tests |
 | `npm run test:lokkhi` | Run Lokkhi and shared tests |
-| `npm run prod-env:mushak` | Start the built backend with `.env.production` |
+| `npm run prod-env:mushak` | Serve the built frontend and backend with `.env.production` |
 
 ## Production build
 
@@ -213,15 +213,20 @@ Outputs:
 - `mushak/frontend/dist` — static files;
 - `mushak/backend/dist` — compiled Node ESM.
 
-Start the backend with:
+Start both locally with the production environment:
 
 ```bash
-node mushak/backend/dist/index.js
+npm run prod-env:mushak
 ```
 
-The backend does not serve the frontend. Put both behind one origin and proxy
-`/api`, `/health`, `/openapi.json`, `/docs` and `/mcp` to the backend. Set the
-environment through the process manager, not a committed file.
+That serves `mushak/frontend/dist` through `vite preview` on port 5173 and
+starts the backend with `.env.production`; the preview server proxies `/api` to
+the backend.
+
+The backend does not serve the frontend. For a real deployment, put both behind
+one origin and proxy `/api`, `/health`, `/openapi.json`, `/docs` and `/mcp` to
+the backend. Set the environment through the process manager, not a committed
+file.
 
 Production checklist:
 

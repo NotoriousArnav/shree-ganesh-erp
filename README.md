@@ -110,16 +110,20 @@ Test files sit next to the code they cover as `*.test.ts`.
 
 ## Production environment
 
-Both backends read `.env.production` when started with the `prod-env:*` scripts:
+Both backends read `.env.production` when started with the `prod-env:*` scripts.
+The scripts also serve the built frontend with `vite preview`, so each app is
+usable as one process pair:
 
 ```bash
 npm run build
-npm run prod-env:mushak   # built Mushak backend on $PORT
-npm run prod-env:lokkhi   # built Lokkhi backend on $PORT
+npm run prod-env:mushak   # http://localhost:5173 + API on $PORT
+npm run prod-env:lokkhi   # http://localhost:5175 + API on $PORT
 ```
 
-Set `DOTENV_CONFIG_PATH=.env.production` to point a one-off command at the same
-file. Use different `PORT` values if both run on one host.
+The preview server proxies `/api` to the backend, exactly like the dev server.
+For a real deployment, put the built `dist/` behind a web server or CDN and
+proxy `/api` to the backend; `vite preview` is for verification and LAN use.
+Use different `PORT` values if both run on one host.
 
 Schema changes:
 

@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 
 import RequireRole from "./components/require-role";
 import MerchantLayout from "./components/merchant-layout";
+import { basePath } from "./lib/base-path";
 import { startThemeWatcher } from "./lib/theme";
 import Admin from "./routes/Admin";
 import ForgotPassword from "./routes/ForgotPassword";
@@ -39,6 +40,12 @@ export const router = createBrowserRouter([
     element: <ResetPassword />,
   },
   {
+    // Better Auth emails `<origin>/reset-password/<token>`; the page also
+    // accepts `?token=` for links that carry the token as a query parameter.
+    path: "/reset-password/:token",
+    element: <ResetPassword />,
+  },
+  {
     path: "/admin",
     element: (
       <RequireRole roles={["super_admin", "dev"]}>
@@ -65,7 +72,7 @@ export const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
     ],
   },
-]);
+], { basename: basePath || "/" });
 
 startThemeWatcher();
 

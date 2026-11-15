@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
-  const token = params.get("token");
+  const route = useParams();
+  const token = route.token ?? params.get("token");
   const linkError = params.get("error");
 
   const [password, setPassword] = useState("");
@@ -65,7 +67,7 @@ export default function ResetPassword() {
 
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
-          <img src="/brand/mushak.png" alt="Mushak" className="h-16 w-auto" />
+          <img src={withBasePath("/brand/mushak.png")} alt="Mushak" className="h-16 w-auto" />
           <p className="mt-3 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
             Shree Ganesh ERP
           </p>

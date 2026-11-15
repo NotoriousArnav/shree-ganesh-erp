@@ -4,7 +4,14 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import tailwindcss from "@tailwindcss/vite";
 
+/**
+ * Public mount point. `/` locally and on Netlify; `/mushak/` when the app runs
+ * behind the unified container's router next to Lokkhi.
+ */
+const base = process.env.MUSHAK_BASE_PATH ?? "/";
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -14,13 +21,14 @@ export default defineConfig({
         name: "Mushak",
         short_name: "Mushak",
         description: "Inventory management for small merchants",
-        start_url: "/",
+        start_url: base,
+        scope: base,
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#000000",
         icons: [
           {
-            src: "/icon.svg",
+            src: `${base}icon.svg`,
             sizes: "any",
             type: "image/svg+xml",
           },

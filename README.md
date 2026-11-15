@@ -1,478 +1,382 @@
 # Shree Ganesh ERP
 
-A suite of separate applications for small merchants. Each app runs on its own
-and shares the same shops, users and database.
+A suite of modular web applications designed for small merchants, kirana stores, bookshops, and retail businesses. Each application can run independently or together as a unified suite, sharing the same shops, users, credentials, and PostgreSQL database.
 
-| App | What it does | Frontend | Backend | Docs |
-| --- | --- | --- | --- | --- |
-| **Mushak** | Catalogue, stock, categories, staff, dashboard, reports | 5173 | 8080 | [mushak/docs](mushak/docs/README.md) |
-| **Lokkhi** | Sales and purchase invoices, printing, optional Mushak links | 5175 | 8081 | [lokkhi/docs](lokkhi/docs/README.md) |
+---
 
-Shared code lives in `packages/`: `@ganesh/db` (schema, client, migrations),
-`@ganesh/shared` (invoice maths, numbering, line status), `@ganesh/server`
-(auth, guards, mail).
+## Suite Applications & Service Matrix
 
-Invoices in Lokkhi are self-contained snapshots. Mushak is a suggestion source,
-never a validation gate: an item that is not in Mushak can still be billed,
-issued and printed.
+| App / Service | Description | Local Port | Backend API | Swagger Docs | Default Route |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Mushak** | Catalogue, stock tracking, categories, staff, dashboard, reports, MCP | `5173` | `http://localhost:8080` | `http://localhost:8080/docs` | `http://localhost:5173/app` |
+| **Lokkhi** | Sales and purchase invoices, sequences, printing, PDF export | `5175` | `http://localhost:8081` | `http://localhost:8081/docs` | `http://localhost:5175/invoices` |
+| **PostgreSQL 17** | Shared transactional database | `5432` | — | — | `postgres://mushak:...@localhost:5432/mushak` |
+| **RustFS (S3)** | S3-compatible storage for product images & invoice assets | `9000` | S3 API: `:9000` | Web Console: `:9001` | `http://localhost:9001` |
 
-## Stack
+Shared libraries live under `packages/`:
+- **`@ganesh/db`**: Single source of truth for Drizzle ORM schema, migrations, and database client.
+- **`@ganesh/shared`**: Tax-exclusive pricing, invoice line totals, unit fraction validation, CSV exports.
+- **`@ganesh/server`**: Better Auth configuration, session verification, permission guards, email dispatch.
 
-- **Frontend** — React 18, React Router v7, Vite 5, PWA, TypeScript, Tailwind CSS v4
-- **Backend** — Fastify 5, TypeScript, OpenAPI/Swagger, MCP server (Mushak)
-- **Database** — PostgreSQL 17 in Docker, Drizzle ORM + `postgres.js`
-- **Auth** — Better Auth, email/password and phone/password, database sessions
+Invoices in Lokkhi are self-contained snapshots: Mushak acts as an optional suggestion source, not a validation gate. You can issue and print invoices even for custom items that do not exist in the catalogue.
 
-## Getting started
+---
 
+## Technology Stack
+
+- **Frontend**: React 18, React Router v7, Vite 5, Tailwind CSS v4, PWA (offline capability & manifest).
+- **Backend**: Fastify 5, TypeScript, OpenAPI/Swagger UI, Model Context Protocol (MCP server on Mushak).
+- **Database**: PostgreSQL 17 (Docker), Drizzle ORM, `postgres.js` with serverless connection pooling (`max: 1`, `prepare: false`).
+- **Authentication**: Better Auth with HTTP-only cookies, password hashing, database sessions, and role/permission verification.
+- **Object Storage**: RustFS (S3-compatible, bundled in Docker Compose) or AWS S3 / MinIO.
+- **Documentation**: Hugo Book sites, OpenAPI 3.1 specifications.
+
+---
+
+## Prerequisites Checklist
+
+Ensure the following tools are installed on your machine before starting:
+
+1. **Node.js**: `v20.x` or `v24.x LTS` (`node -v`)
+2. **npm**: `v10.x` or later (`npm -v`)
+3. **Docker & Docker Compose**: Running daemon required for local Postgres and RustFS storage (`docker --version` and `docker compose version`).
+4. **Git**: For version control (`git --version`).
+
+---
+
+## Quickstart: Zero to Running in 5 Minutes
+
+Follow these step-by-step instructions in order from the repository root:
+
+### 1. Clone the repository
 ```bash
-npm install
-cp mushak/backend/.env.example mushak/backend/.env   # first run only
-npm install
-npm run build:packages                              # shared @ganesh/* packages
-npm run db:up                                        # start Postgres
-npm run db:migrate                                   # apply migrations
-npm run dev:mushak                                   # frontend + backend
+git clone https://github.com/your-username/GaneshaMerchantAssistiveSoftware.git
+cd GaneshaMerchantAssistiveSoftware
 ```
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:8080
-- API docs: http://localhost:8080/docs
-- DB health: http://localhost:8080/health/db
-- Storage health: http://localhost:8080/health/storage
-- RustFS console: http://localhost:9001
-- Sign in: http://localhost:5173/login
-
-### Lokkhi
-
+### 2. Install dependencies
 ```bash
-cp lokkhi/backend/.env.example lokkhi/backend/.env   # first run only
-npm run dev:lokkhi
+npm install
+```
+> [!NOTE]
+> All packages are managed as an npm workspace. A single `npm install` at the root installs dependencies across the root, shared packages, and both apps.
+
+### 3. Configure environment files
+Both backends require their own `.env` configuration file:
+```bash
+# 1. Configure Mushak backend
+cp mushak/backend/.env.example mushak/backend/.env
+
+# 2. Configure Lokkhi backend
+cp lokkhi/backend/.env.example lokkhi/backend/.env
 ```
 
-- Frontend: http://localhost:5175
-- Backend: http://localhost:8081
-- API docs: http://localhost:8081/docs
+> [!IMPORTANT]
+> **Auth Secret Pairing**: Open both `mushak/backend/.env` and `lokkhi/backend/.env` and ensure `BETTER_AUTH_SECRET` has the **exact same value** in both files. This allows the same user session and login credentials to work seamlessly across both applications.
+>
+> You can generate a random 32-byte secret with:
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+> ```
 
-Lokkhi uses the same database and the same `BETTER_AUTH_SECRET`, so the account
-you use in Mushak also works there. See [lokkhi/docs](lokkhi/docs/README.md).
-
-Create the first admin after the initial setup:
-
+### 4. Build shared packages
 ```bash
+npm run build:packages
+```
+> [!WARNING]
+> Shared packages (`@ganesh/db`, `@ganesh/shared`, `@ganesh/server`) resolve to their compiled `dist/` folders. You **must** run `npm run build:packages` before starting any app and whenever you edit code in `packages/*/src`.
+
+### 5. Start the database and storage services
+Launch PostgreSQL 17 and RustFS (S3) via Docker:
+```bash
+npm run db:up
+```
+Verify the containers are healthy with `docker ps`. You should see `mushak-db` and `mushak-rustfs` running.
+
+### 6. Apply database migrations
+Push the initial schema to the database:
+```bash
+npm run db:migrate
+```
+
+### 7. Seed demo data and platform admin
+Populate the database with ready-to-test data:
+```bash
+# Creates the "Ganesh Kirana" demo merchant, categories, products, opening stock, and logins:
+npm run seed:demo
+
+# Creates the platform Super Admin account (reads ADMIN_EMAIL & ADMIN_PASSWORD from mushak/backend/.env):
 npm run seed:admin
 ```
 
-It reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `mushak/backend/.env`.
+### 8. Start the development servers
+Open two terminal windows to run both applications simultaneously, or start whichever app you need:
 
-### Trying it on a phone
-
-The Vite dev server listens on `0.0.0.0`, so a phone on the same Wi-Fi can open
-`http://<laptop-lan-ip>:5173`. While `NODE_ENV` is not `production`, the backend
-accepts sign-in requests from any origin, so phones, mDNS names and tunnels work
-without extra config.
-
-A deployed frontend must be listed in `TRUSTED_ORIGINS` (comma-separated) in the
-backend environment; production only accepts the configured origins. Set
-`TRUSTED_ORIGINS=*` to accept every origin, at the cost of Better Auth's origin
-and redirect checks.
-
-## Database
-
-The database runs as the `mushak-db` container (`postgres:17-alpine`) with a
-persistent named volume. Configuration is read from `mushak/backend/.env`:
-
-```dotenv
-DATABASE_URL=postgres://mushak:mushak_dev_password@localhost:5432/mushak
+#### Option A: Start Mushak (Catalogue & Inventory)
+```bash
+npm run dev:mushak
 ```
+- **Web App**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:8080](http://localhost:8080)
+- **API Documentation**: [http://localhost:8080/docs](http://localhost:8080/docs)
 
-Scripts:
+#### Option B: Start Lokkhi (Invoices & Billing)
+```bash
+npm run dev:lokkhi
+```
+- **Web App**: [http://localhost:5175](http://localhost:5175)
+- **Backend API**: [http://localhost:8081](http://localhost:8081)
+- **API Documentation**: [http://localhost:8081/docs](http://localhost:8081/docs)
 
-| Script | Description |
-| --- | --- |
-| `npm run db:up` | Start Postgres and RustFS containers |
-| `npm run db:down` | Stop the containers (data is kept) |
-| `npm run db:migrate` | Apply generated migrations |
-| `npm run db:studio` | Open Drizzle Studio |
+---
 
-## Tests
+## Default Login Credentials
 
-Unit tests use Node's built-in test runner through `tsx`:
+After running `npm run seed:demo` and `npm run seed:admin`, the following accounts are ready to use in either app:
+
+| Role | Email / Phone | Password | Capabilities & Scope |
+| :--- | :--- | :--- | :--- |
+| **Merchant (Owner)** | `merchant@mushak.local`<br>`+919876543210` | `merchant-pass-123` | Full access to Ganesh Kirana (products, categories, stock, staff, invoices, reports). |
+| **Staff Member** | `staff@mushak.local`<br>`+919876543211` | `staff-pass-123` | Counter operations; permissions governed by the shop owner (defaults to stock/sales). |
+| **Super Admin** | `admin@mushak.local` | `change-me-mushak-admin` | Platform owner; manage merchants and users at `http://localhost:5173/admin`. |
+
+---
+
+## Verifying Setup & Health Checks
+
+Verify your backend services and databases with these endpoints:
 
 ```bash
-npm test             # everything
-npm run test:mushak  # Mushak frontend + shared packages
-npm run test:lokkhi  # Lokkhi frontend + shared packages
-npm run test:watch   # re-run on change
+# Mushak health checks
+curl http://localhost:8080/health          # Expected: {"status":"ok"}
+curl http://localhost:8080/health/db       # Expected: {"status":"ok","database":"connected"}
+curl http://localhost:8080/health/storage  # Expected: {"status":"ok","storage":"ready"}
+
+# Lokkhi health checks
+curl http://localhost:8081/health          # Expected: {"status":"ok","app":"lokkhi"}
+curl http://localhost:8081/health/db       # Expected: {"status":"ok","database":"connected"}
+
+# RustFS (S3) Console
+# Visit http://localhost:9001 in your browser
+# Username: mushakadmin
+# Password: mushak_dev_storage_secret
 ```
 
-Test files sit next to the code they cover as `*.test.ts`.
-
-## Production environment
-
-Both backends read `.env.production` when started with the `prod-env:*` scripts.
-The scripts also serve the built frontend with `vite preview`, so each app is
-usable as one process pair:
-
+Run the automated test suite to ensure calculations, formatting, and unit logic are working:
 ```bash
-npm run build
-npm run prod-env:mushak   # http://localhost:5173 + API on $PORT
-npm run prod-env:lokkhi   # http://localhost:5175 + API on $PORT
+npm test
+```
+All 27 test cases should pass.
+
+---
+
+## Mobile & Local Network (Wi-Fi) Testing
+
+You can test either app on a physical phone or tablet connected to the same Wi-Fi network:
+
+1. Find your machine's local IP address (e.g., `192.168.1.50`).
+2. The Vite dev servers and Fastify backends listen on `0.0.0.0` by default.
+3. Open `http://<your-lan-ip>:5173` (Mushak) or `http://<your-lan-ip>:5175` (Lokkhi) on your phone.
+4. In development (`NODE_ENV !== "production"`), the backend automatically trusts loopback and local network IPv4 origins, allowing authentication from your mobile device without manual CORS configuration.
+
+---
+
+## Monorepo Architecture & Conventions
+
+### Shared Packages Resolve to `dist/`, not `src/`
+Shared packages (`@ganesh/db`, `@ganesh/shared`, `@ganesh/server`) export precompiled JavaScript from `./dist/`. **Editing `packages/*/src` has no effect until you run `npm run build:packages`.** If you make changes to shared code and see no difference in runtime behavior, re-run:
+```bash
+npm run build:packages
 ```
 
-The preview server proxies `/api` to the backend, exactly like the dev server.
-For a real deployment, put the built `dist/` behind a web server or CDN and
-proxy `/api` to the backend; `vite preview` is for verification and LAN use.
-Use different `PORT` values if both run on one host.
+### Backend Structure
+- **Two files per service**: `src/app.mts` configures and exports the Fastify instance (without listening); `src/index.ts` is the sole entry point that invokes `.listen()`.
+- **Absolute Routes**: All backend route handlers declare full paths (e.g., `/api/merchant/...` or `/api/admin/...`). There is no global prefix plugin.
+- **Tenant Isolation**: Every merchant-facing endpoint pulls the `merchantId` from the active session (`request.merchantAccess.merchantId`). Never pass `merchantId` in request bodies or query parameters.
 
-## Deploying the frontends on Netlify
+### Database & Migrations
+- The entire monorepo shares **one database schema** (`packages/db/src/schema.ts`) and **one migration folder** (`packages/db/drizzle/`).
+- Database migrations must be generated from the `mushak/backend` workspace:
+  ```bash
+  npm run db:generate -w mushak/backend
+  npm run db:migrate
+  ```
+- To inspect or edit records visually, launch Drizzle Studio:
+  ```bash
+  npm run db:studio
+  ```
 
-`mushak/netlify.toml` and `lokkhi/netlify.toml` deploy one app each. Create two
-sites from this repository and use the same settings for both:
+---
 
-1. Leave **Base directory** empty (the repository root) and set **Package
-   directory** to `mushak` for one site and `lokkhi` for the other. Dependencies
-   are installed at the root, where the workspace lockfile lives.
-2. Add a `BACKEND_URL` environment variable in each site, for example
-   `https://api.mushak.example.com` (no trailing slash).
-3. Deploy. The command builds the shared packages and the app, then publishes
-   `<app>/frontend/dist`.
-4. On the backend set `FRONTEND_URL`, `BETTER_AUTH_URL` and `TRUSTED_ORIGINS`
-   to the real Netlify domains.
+## Detailed Application Guides
 
-Requests to `/api/*` are proxied to `${BACKEND_URL}/api/*` by Netlify's CDN.
-The browser stays on the Netlify origin, so the session cookie keeps working
-and no CORS or `SameSite` change is needed. Unknown paths fall back to
-`index.html` for the client-side router.
+### 1. Mushak (Catalogue, Stock & Staff)
 
-Netlify does not expand environment variables in redirect rules, so the build
-command substitutes `BACKEND_URL` into the `BACKEND_PLACEHOLDER` in
-`netlify.toml` before the redirects are read. The build fails with a clear
-message if `BACKEND_URL` is missing.
+Accessible at `http://localhost:5173/app` after signing in.
 
-### Vercel (alternative)
+- **Catalogue vs. Inventory**:
+  - `catalogue_items` represents *what a product is* (name, barcode, SKU, tax rate, purchase/selling price, unit, attributes).
+  - `inventory_items` tracks *how much the store owns* (stock quantity, reorder level).
+  - `stock_movements` provides a signed audit trail for every addition, deduction, purchase, damage, and adjustment.
+- **Inline Categories**: Typing a category that does not exist directly in the product creation modal automatically creates it on save.
+- **Staff Permissions**:
+  - The `merchant` owner has full access.
+  - The owner can grant specific permissions to `staff` accounts: `stock` (record movements), `catalogue` (add/edit products and pricing), and `categories` (category management). Staff accounts without granted permissions operate in view-only mode.
+- **Object Storage**:
+  - Upload product photos and shop logos directly from the UI.
+  - Files are stored in RustFS (or AWS S3) via presigned URLs and scoped to `<merchantId>/...`.
 
-`mushak/vercel.json` and `lokkhi/vercel.json` do the same job on Vercel. For
-each Vercel project:
+### 2. Lokkhi (Invoicing & Billing)
 
-1. Set **Root Directory** to `mushak` or `lokkhi`. Vercel only reads
-   `vercel.json` from the configured root directory; if the root stays at the
-   repository root, Vercel runs the workspace-wide `npm run build` and fails
-   with `STATIC_BUILD_NO_OUT_DIR: No Output Directory named "dist"`.
-2. Add `BACKEND_URL` in **Project Settings → Environment Variables**.
-3. Deploy. The config installs from the repo root, builds the packages and the
-   app, and publishes `frontend/dist`.
+Accessible at `http://localhost:5175/invoices` after signing in.
 
-`/api/*` is rewritten to `${BACKEND_URL}/api/*` with Vercel's `routes` syntax,
-which supports environment-variable expansion. The browser stays same-origin,
-so the session cookie keeps working.
+- **Independent Snapshots**: Lokkhi creates self-contained invoice line items (`item_name`, `unit_price`, `quantity`, `tax_rate`, `discount`). If a catalogue product is altered or deleted in Mushak later, historic invoices remain perfectly intact and unaltered.
+- **Mushak Linkage**: Typing product names in an invoice line fetches instant suggestions from Mushak's catalogue. Linked items automatically sync stock movements upon invoice issuance on a best-effort basis.
+- **Sequential Numbering**: Thread-safe, per-merchant financial year invoice numbering (`SALE/2026-27/0001`).
+- **Printing & PDF**: Clean, print-ready invoices supporting thermal receipt printers and standard A4 printing.
 
-Schema changes:
+---
 
-```bash
-npm run db:generate -w mushak/backend   # generate SQL from src/db/schema.ts
-npm run db:migrate                      # apply it
-```
+## User & Merchant Administration
 
-The app uses `postgres.js` with `max: 1` and `prepare: false`, so the same code
-works against a local container or a serverless/pooled provider such as Neon,
-Supabase or Vercel Postgres — only `DATABASE_URL` changes.
-
-## Authentication and roles
-
-Better Auth handles sessions in the database and sets an http-only cookie.
-Users sign in with **email or phone** plus a password. Public sign-up is
-disabled; accounts are provisioned by the admin.
-
-| Role | Scope | Access |
-| --- | --- | --- |
-| `super_admin` | Platform | Everything, including admin API and impersonation |
-| `dev` | Platform | Read users/merchants, support actions, no role changes |
-| `merchant` | One merchant | Own inventory and staff |
-| `staff` | One merchant | Day-to-day operations, no user management |
-
-Guards live in `mushak/backend/src/http/auth-guard.ts`. The merchant id always
-comes from the session, never from the request body.
-
-Create a user:
+### Provisioning Accounts via CLI
+Because public sign-up is disabled (`ALLOW_SIGNUP=false`), accounts are created via CLI or the Admin UI:
 
 ```bash
+# Create a merchant or staff user:
 npm run user:create -- \
-  --email owner@shop.in \
-  --password 'a-strong-password' \
+  --email owner@myshop.in \
+  --password 'SuperSecret123' \
   --name 'Shop Owner' \
   --role merchant \
   --merchant ganesh-kirana \
   --phone +919876543210
+
+# Reset a user's password without triggering email delivery:
+npm run user:reset-password -w mushak/backend -- \
+  --email owner@myshop.in \
+  --password 'NewStrongPassword123'
 ```
 
-`--merchant` accepts a merchant id or slug and is required for `merchant` and
-`staff`. `--phone` is optional and enables phone sign-in.
+### Adding a New Merchant via Admin UI
+1. Sign in to [http://localhost:5173/login](http://localhost:5173/login) with the Super Admin credentials (`admin@mushak.local` / `change-me-mushak-admin`).
+2. Navigate to `/admin`.
+3. Click **Add Merchant**, enter shop details (name, slug, currency, phone), and provision the shop owner account.
 
-Reset a password without sending mail:
+---
+
+## Common Gotchas & Troubleshooting
+
+### 1. `Cannot connect to Postgres (port 5432)`
+- **Symptom**: `ECONNREFUSED 127.0.0.1:5432` or migration fails.
+- **Fix**: Check if Docker is running (`docker info`). Ensure you started the database with `npm run db:up`. If you have a local PostgreSQL instance running on your host machine, either stop it (`sudo systemctl stop postgresql`) or change `POSTGRES_PORT` in `mushak/backend/.env` and update `DATABASE_URL`.
+
+### 2. `Changes in shared packages have no effect`
+- **Symptom**: Code edited in `packages/shared/src` or `packages/db/src` is ignored.
+- **Fix**: Run `npm run build:packages`. Shared packages point to `dist/`, not `src/`.
+
+### 3. `Authentication fails or session drops when switching apps`
+- **Symptom**: Signing into Mushak works, but Lokkhi rejects the session or prompts for sign-in again.
+- **Fix**: Check `mushak/backend/.env` and `lokkhi/backend/.env`. The `BETTER_AUTH_SECRET` value **must match exactly** in both files.
+
+### 4. `API returns 401 Unauthorized or 403 Forbidden`
+- **Symptom**: User can sign in, but API requests fail with 403.
+- **Fix**: Users with `merchant` or `staff` roles require `users.merchant_id` to be populated in the database. Use `npm run seed:demo` or use `--merchant <id-or-slug>` when creating users with `npm run user:create`.
+
+### 5. `RustFS (S3) upload errors`
+- **Symptom**: Image uploads fail or return 503.
+- **Fix**: Verify storage container health at `http://localhost:8080/health/storage`. Ensure `mushak-rustfs` container is running (`npm run db:up`).
+
+---
+
+## Monorepo Scripts Reference
+
+| Command | Purpose |
+| :--- | :--- |
+| `npm run build:packages` | Compiles TypeScript in `packages/db`, `packages/shared`, and `packages/server` into `dist/`. |
+| `npm run build` | Builds shared packages, Mushak frontend/backend, and Lokkhi frontend/backend. |
+| `npm run dev:mushak` | Runs Mushak frontend (5173) and backend (8080) concurrently with live reload. |
+| `npm run dev:lokkhi` | Runs Lokkhi frontend (5175) and backend (8081) concurrently with live reload. |
+| `npm test` | Executes the 27 unit tests across all workspaces using Node's native test runner. |
+| `npm run test:watch` | Runs unit tests in watch mode, re-running on file changes. |
+| `npm run db:up` | Starts Postgres 17 and RustFS (S3) Docker containers in the background. |
+| `npm run db:down` | Stops the Docker containers (data is retained in Docker volumes). |
+| `npm run db:migrate` | Applies pending Drizzle migrations to PostgreSQL. |
+| `npm run db:studio` | Launches Drizzle Studio GUI for visual database inspection. |
+| `npm run seed:demo` | Seeds demo merchant "Ganesh Kirana" with products, categories, stock, and logins. |
+| `npm run seed:admin` | Seeds or verifies the Super Admin account configured in `.env`. |
+| `npm run user:create -- ...` | Creates a new user with specific role and merchant binding. |
+| `npm run mail:test` | Sends a test email to verify Nodemailer SMTP / console mailer configuration. |
+| `npm run docs:openapi` | Exports fresh OpenAPI specification JSON to documentation directory. |
+| `npm run docs:all` | Compiles Hugo documentation books for all apps into `dist/docs/`. |
+
+---
+
+## Production Deployment
+
+### Option A: Unified container (entire ERP on one origin)
+
+`docker/erp.Dockerfile` builds one image that runs Caddy, both Fastify backends,
+and both SPA builds with path-prefix separation:
+
+| URL prefix | Serves |
+| --- | --- |
+| `/` | redirects to `/mushak/` |
+| `/mushak/`, `/lokkhi/` | Mushak and Lokkhi frontends |
+| `/mushak/api/*`, `/lokkhi/api/*` | matching backends (prefix stripped to `/api/*`) |
+| `/mushak/docs`, `/mushak/openapi.json`, `/mushak/mcp*`, `/lokkhi/docs` | docs and tooling |
+| `/health` | container-level health |
+
+Build and run from the **repository root** (context must include `packages/`):
 
 ```bash
-npm run user:reset-password -- \
-  --email admin@mushak.local \
-  --password '<new-password>'
+docker build -f docker/erp.Dockerfile -t ganesh-erp .
+
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL=postgres://... \
+  -e BETTER_AUTH_SECRET=... \
+  -e BETTER_AUTH_URL=https://erp.example.com \
+  -e FRONTEND_URL=https://erp.example.com \
+  -e TRUSTED_ORIGINS=https://erp.example.com \
+  -e MAIL_DRIVER=smtp -e SMTP_HOST=... \
+  -e STORAGE_DRIVER=s3 -e S3_BUCKET=... \
+  ganesh-erp
 ```
 
-This hashes with Better Auth, creates the credential account if needed, and
-revokes the user's existing sessions.
+`BETTER_AUTH_URL` and `FRONTEND_URL` are the public origin (no path suffix). Both
+apps share one database and `BETTER_AUTH_SECRET`, so the same account works in
+both. Better Auth password-reset links are routed to the correct app by Caddy
+based on the `callbackURL` the frontends send.
 
-Roles and merchant links can also be edited directly with Drizzle Studio.
-`users.role` is constrained to the four role values; merchant-scoped accounts
-must have `users.merchant_id` set before they can use the API.
+### Option B: Split deploy (separate backends + frontends)
 
-### Adding a new merchant
+**Backends (Docker / Fly.io).** Standalone images, built from the repo root:
 
-A super admin registers a new shop through the admin API, then adds the owner:
+- Mushak API: `docker/mushak.Dockerfile` / `fly.mushak.toml`
+- Lokkhi API: `docker/lokkhi.Dockerfile` / `fly.lokkhi.toml`
 
 ```bash
-# 1. Create the merchant shop.
-curl -X POST http://localhost:8080/api/admin/merchants \
-  -H 'content-type: application/json' -H 'cookie: <super_admin_session>' \
-  -d '{"name":"Anime Point Siliguri","slug":"anime-point-siliguri","phone":"+919870000000}'
+fly secrets set --config fly.mushak.toml DATABASE_URL=... BETTER_AUTH_SECRET=...
+fly secrets set --config fly.lokkhi.toml DATABASE_URL=... BETTER_AUTH_SECRET=...
 
-# 2. Create the shop owner (full permissions).
-curl -X POST http://localhost:8080/api/admin/merchants/<merchantId>/users \
-  -H 'content-type: application/json' -H 'cookie: <super_admin_session>' \
-  -d '{"name":"Deepak Kothiyal","email":"deepak@anime-point.in","password":"a-strong-password","permissions":["stock","catalogue","categories"]}'
+fly deploy --config fly.mushak.toml
+fly deploy --config fly.lokkhi.toml
 ```
 
-The admin UI exposes both calls on `/admin` via **Add merchant**.
+**Frontends (Netlify).** One site per app:
 
-Once the owner is in, they create staff from their own `/app/staff` screen, for
-example for an anime/figurine shop:
+1. **Base directory**: leave empty (repo root). **Package directory**: `mushak` or `lokkhi`.
+2. **Environment**: `BACKEND_URL` = the deployed backend origin (no trailing slash).
+3. **Build**: `mushak/netlify.toml` / `lokkhi/netlify.toml` build and substitute
+   `BACKEND_URL` into `/api/*` proxy redirects, keeping the browser same-origin
+   with the Netlify site. For Lokkhi, set `BACKEND_URL` to the Lokkhi backend
+   (or `<origin>/lokkhi` if it is mounted under a prefix). Set `FRONTEND_URL`,
+   `BETTER_AUTH_URL`, and `TRUSTED_ORIGINS` on each backend to the real frontend
+   domain.
 
-- owner `Deepak Kothiyal` — `deepak@anime-point.in / deepak-pass-123` — full access
-- staff `Sushrita Saha` — `sushrita@anime-point.in / sushrita-pass-123` — `["stock"]`
-
-## Mail
-
-Mail goes through `AbstractMailer` (`mushak/backend/src/mail/mailer.ts`).
-A transport only implements `deliver()`; validation, recipients, the generated
-message id and the rendered body are shared.
-
-Two transports ship:
-
-- `console` — prints From/To/Subject/body to the terminal and writes a `.eml`
-  and a `.json` copy to `/tmp/mushak-mail` (mode `0600`). Development only.
-- `smtp` — delivers through any SMTP provider (SES, Resend, Postmark, Mailgun,
-  Brevo, Mailpit) using Nodemailer.
-
-```bash
-npm run mail:test                       # send a sample message
-npm run mail:test -- someone@shop.in    # send to a specific address
-```
-
-Configuration in `mushak/backend/.env`:
-
-```dotenv
-MAIL_DRIVER=console
-MAIL_FROM=Mushak <no-reply@mushak.local>
-MAIL_DIR=/tmp/mushak-mail
-
-# When MAIL_DRIVER=smtp
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_REQUIRE_TLS=true
-SMTP_USER=
-SMTP_PASS=
-```
-
-Password-reset and email-verification hooks already use the mailer, so
-requesting a reset prints the link while `MAIL_DRIVER` is `console`, and sends
-it to the inbox when it is `smtp`. The full browser flow is:
-
-`/login` → **Forgot password?** → `/forgot-password` → emailed link →
-`/reset-password` → sign in with the new password.
-
-See `mushak/docs/operations/mail.md` for provider recipes, STARTTLS/TLS
-behaviour, DNS (SPF/DKIM/DMARC) and troubleshooting.
-
-## Object storage
-
-Files (product images, invoices, attachments) go through `AbstractStorage` in
-`mushak/backend/src/storage/storage.ts`. The S3 driver works with AWS S3,
-RustFS, MinIO and any S3-compatible endpoint. `getStorage()` picks the driver
-from `STORAGE_DRIVER`; the bundled `docker compose` runs RustFS locally, so
-`npm run db:up` starts both Postgres and RustFS.
-
-```dotenv
-STORAGE_DRIVER=s3
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_ACCESS_KEY=mushakadmin
-S3_SECRET_KEY=mushak_dev_storage_secret
-S3_BUCKET=mushak
-S3_FORCE_PATH_STYLE=true
-# S3_PUBLIC_URL=https://cdn.example.com/mushak
-```
-
-The bucket is created on first use. Keys are tenant-scoped
-(`<merchantId>/…`), and the controller refuses keys outside the caller's prefix.
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/api/storage/status` | Driver, bucket, reachability and prefix |
-| `POST` | `/api/storage/presign-upload` | Signed PUT URL (`catalogue` permission) |
-| `GET` | `/api/storage/presign-download` | Signed GET URL for one key |
-| `GET` | `/api/storage/objects` | List under the merchant prefix |
-| `PUT` | `/api/storage/objects` | Direct upload as `application/octet-stream` (`catalogue`) |
-| `DELETE` | `/api/storage/objects` | Delete one key (`catalogue`) |
-
-Browser uploads use the presigned URL, so bytes go straight to RustFS and never
-pass through the API server.
-
-## Merchant app
-
-Merchant and staff accounts land on `/app` after signing in:
-
-| Screen | Path | What it does |
-| --- | --- | --- |
-| Dashboard | `/app` | Product and category counts, stock value, today's movements, low-stock list, recent activity |
-| Inventory | `/app/inventory` | On-hand stock, values and reorder levels, stock adjustments, product detail |
-| Catalogue | `/app/catalogue` | Product definitions: search, filters, add/edit/archive, prices, SKU and GST |
-| Stock | `/app/stock` | Full stock-movement history |
-| Categories | `/app/categories` | Create, rename and delete categories |
-| Staff | `/app/staff` | Create counter logins, choose access, reset passwords, deactivate |
-
-Inventory and Catalogue are two tables: `catalogue_items` holds the product
-definition (name, SKU, prices, GST), and `inventory_items` holds the stock for
-it (quantity, reorder level) with `stock_movements` as the audit trail. Adding a
-product from either tab creates both rows in one transaction, so there is one
-source of truth and no sync step. A catalogue item can exist with zero stock.
-
-The category field on the product form accepts an existing name or a new one.
-Typing a name that does not exist creates the category when the product is
-saved, so a merchant never has to visit the Categories screen first. Names are
-matched case-insensitively ("dairy" reuses "Dairy"). The same is available over
-the API as `categoryName` on product create/update.
-
-Barcode is optional — many items (loose grain, flowers, books) do not have one.
-When SKU is left empty on create, a readable one is generated from the product
-name and made unique within the shop (`BASMATI-RICE-5`, `BASMATI-RICE-5-2`).
-
-### Appearance
-
-The sun/moon/monitor switch appears in the shop sidebar, the mobile header and
-the sign-in pages. It offers **Light**, **Dark** and **System**; System follows
-the device setting and updates live when that changes. The choice is stored in
-`localStorage` (`mushak-theme`) and applied by a tiny inline script before the
-app loads, so there is no flash of the wrong theme.
-
-Roles and staff access:
-
-- **merchant** — owns the shop and always has every permission.
-- **staff** — signs in with the same screens, but only does what the owner
-  allows. Staff always see products and the dashboard. The owner can tick:
-  - **stock** — record purchases, sales, damage and adjustments
-  - **catalogue** — add, edit and archive products, prices, SKU and GST
-  - **categories** — create, rename and delete categories
-
-Nothing ticked means view-only. The Staff screen is merchant-only, and staff
-cannot grant themselves more access. Permission changes take effect on the next
-request, even if the staff member is already signed in. Deactivating an account
-signs it out everywhere and blocks sign-in until it is reactivated.
-
-Every merchant API call is scoped by `merchants.id` from the session; a
-product id from another shop returns 404. Permissions are checked from the
-database on each request, so `users.staff_permissions` is the source of truth.
-
-### Demo shop
-
-```bash
-npm run seed:demo
-```
-
-Creates the `Ganesh Kirana` merchant, five categories, ten products with opening
-stock, and two logins:
-
-| Email | Phone | Password | Role |
-| --- | --- | --- | --- |
-| `merchant@mushak.local` | `+919876543210` | `merchant-pass-123` | merchant |
-| `staff@mushak.local` | `+919876543211` | `staff-pass-123` | staff |
-
-The shop data is fictional. The script is idempotent: existing merchant,
-accounts, categories and SKUs are left alone.
-
-### Merchant API
-
-All routes require a merchant or staff session.
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/api/merchant/profile` | Merchant row and signed-in user |
-| `GET` | `/api/merchant/dashboard` | Counts, stock value, today, low stock, recent movements |
-| `GET/POST` | `/api/merchant/categories` | List with product counts, create |
-| `PATCH/DELETE` | `/api/merchant/categories/:id` | Rename, delete (products become uncategorised) |
-| `GET/POST` | `/api/merchant/catalogue` | Product definitions, `q`/`categoryId`/`includeInactive` |
-| `GET/PATCH/DELETE` | `/api/merchant/catalogue/:id` | Read, update, archive a definition |
-| `GET/POST` | `/api/merchant/inventory` | Stock rows, filters: `q`, `categoryId`, `lowStock`, `includeInactive` |
-| `GET/PATCH/DELETE` | `/api/merchant/inventory/:id` | Read, update, archive (id is the inventory row) |
-| `POST` | `/api/merchant/inventory/:id/stock` | Stock movement |
-| `GET` | `/api/merchant/inventory/:id/movements` | History for one product |
-| `GET` | `/api/merchant/movements` | Recent movements, `?limit=` 1-200 (stock permission) |
-| `GET/POST` | `/api/merchant/staff` | List staff, create a staff account (merchant only) |
-| `PATCH` | `/api/merchant/staff/:id` | Name, phone, permissions or `active` (merchant only) |
-| `POST` | `/api/merchant/staff/:id/password` | Reset a staff password (merchant only) |
-
-Product, category and stock writes also require the matching staff permission.
-Opening stock on a new product needs both `catalogue` and `stock`; creating a
-new category inline needs `categories` (an existing one can always be reused).
-
-Stock movements take a positive `quantity`; the type decides the sign:
-`purchase`/`return_in`/`transfer_in` add, `sale`/`return_out`/`damage`/
-`transfer_out` subtract, and `adjustment` needs `direction=in|out`. A movement
-that would take stock below zero is rejected with a readable error, and the
-stock update plus the movement row happen in one transaction.
-
-## Documentation
-
-The full documentation lives in [`mushak/docs/`](mushak/docs/README.md) and is
-plain Markdown, so it can be published to GitHub Pages or rendered by any
-Markdown site generator without modification.
-
-- [Documentation index](mushak/docs/README.md) — start here
-- [User guide](mushak/docs/user-guide/README.md) — concepts, screens, workflows, troubleshooting
-- [Quick start](mushak/docs/user-guide/quick-start.md) — first-run walkthrough
-- [Admin guide](mushak/docs/admin-guide/README.md) — platform administration
-- [API reference](mushak/docs/api/README.md) — conventions, endpoints, and the generated OpenAPI document
-- [Operations](mushak/docs/operations/setup.md) — setup, configuration, storage, mail, backups
-
-The API reference is generated from the backend spec:
-
-```bash
-npm run docs:openapi     # writes mushak/docs/api/openapi.json
-```
-
-The backend serves the live OpenAPI document at `/openapi.json` and Swagger UI at
-`/docs`; the checked-in copy under `mushak/docs/api/` is generated from source and
-committed alongside the prose documentation.
+---
 
 ## License
 
-Released under the [MIT License](LICENSE). Because this repository is a
-monorepo for the Shree Ganesh ERP suite, the root-level license applies to the
-whole suite; the frontend and backend workspace packages carry the same
-`MIT` identifier in their own manifests.
-
-## Inventory schema (Phase 2)
-
-- `merchants` — shop profile (name, GSTIN, currency, address)
-- `categories` — merchant-scoped, optionally nested
-- `catalogue_items` — product definition: unit, HSN, tax, prices and free-form
-  `attributes` for vertical-specific fields
-- `inventory_items` — stock for one catalogue item: quantity and reorder level,
-  unique per catalogue item today so multi-location stock can grow into it
-- `stock_movements` — signed audit trail of every stock change, linked to the
-  inventory row
-
-## Current phase
-
-Phase 3 — a second application, Lokkhi, with sales and purchase invoices,
-optional Mushak suggestions, best-effort stock integration, subtle per-line
-hints and an Add to Mushak action. Shared database and auth code now live in
-`packages/`.
+Released under the [MIT License](LICENSE).
+Part of the Shree Ganesh ERP Suite.

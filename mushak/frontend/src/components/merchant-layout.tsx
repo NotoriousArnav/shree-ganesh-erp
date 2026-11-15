@@ -6,6 +6,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import { api, errorMessage } from "@/lib/api";
 import { imageSrc } from "@/lib/images";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 import { MerchantProfileProvider } from "@/lib/merchant-context";
 import {
   staffPermissionValues,
@@ -93,7 +94,7 @@ export default function MerchantLayout() {
               className="size-9 shrink-0 rounded-full border object-cover"
             />
           ) : (
-            <img src="/brand/mushak.png" alt="" className="h-9 w-auto" />
+            <img src={withBasePath("/brand/mushak.png")} alt="" className="h-9 w-auto" />
           )}
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{shopName}</p>
@@ -157,7 +158,7 @@ export default function MerchantLayout() {
                   className="size-8 shrink-0 rounded-full border object-cover"
                 />
               ) : (
-                <img src="/brand/mushak.png" alt="" className="h-8 w-auto" />
+                <img src={withBasePath("/brand/mushak.png")} alt="" className="h-8 w-auto" />
               )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{shopName}</p>

@@ -6,6 +6,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 import { homePathForRole } from "@/lib/roles";
 
 /** Accepts 9876543210, +919876543210, or a spaced version of either. */
@@ -88,7 +89,7 @@ export default function Login() {
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
           <img
-            src="/brand/mushak.png"
+            src={withBasePath("/brand/mushak.png")}
             alt="Mushak"
             className="h-16 w-auto"
           />

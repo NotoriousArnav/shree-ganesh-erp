@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
@@ -24,7 +25,7 @@ export default function Home() {
       </div>
 
       <img
-        src="/brand/shree-ganesh-erp.png"
+        src={withBasePath("/brand/shree-ganesh-erp.png")}
         alt="Shree Ganesh ERP"
         className="h-36 w-auto max-w-full"
       />
@@ -40,7 +41,7 @@ export default function Home() {
       </div>
 
       <img
-        src="/brand/mushak.png"
+        src={withBasePath("/brand/mushak.png")}
         alt="Mushak mascot"
         className="h-40 w-auto max-w-full"
       />

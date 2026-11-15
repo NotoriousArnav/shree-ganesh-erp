@@ -72,14 +72,28 @@ rules, so the build command substitutes `BACKEND_URL` into the placeholder
 before redirects are read. Point `FRONTEND_URL`, `BETTER_AUTH_URL` and
 `TRUSTED_ORIGINS` on the backend at the Netlify domain.
 
-### Vercel
+### Unified container (Caddy + both apps)
 
-`lokkhi/vercel.json` builds the same frontend on Vercel. Set the project's
-**Root Directory** to `lokkhi` (Vercel only reads `vercel.json` there), add
-`BACKEND_URL`, and deploy. The build runs from the repository root and publishes
-`frontend/dist`; `/api/*` is rewritten to `${BACKEND_URL}/api/*`. Leaving the
-Root Directory at the repository root builds every workspace and fails with
-`STATIC_BUILD_NO_OUT_DIR`.
+`docker/erp.Dockerfile` builds one image that serves both SPAs and both APIs on
+a single origin with path-prefix separation (`/mushak/*`, `/lokkhi/*`,
+`/mushak/api/*`, `/lokkhi/api/*`). Build from the repository root:
+
+```bash
+docker build -f docker/erp.Dockerfile -t ganesh-erp .
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL=postgres://... \
+  -e BETTER_AUTH_SECRET=... \
+  -e BETTER_AUTH_URL=https://erp.example.com \
+  -e FRONTEND_URL=https://erp.example.com \
+  -e TRUSTED_ORIGINS=https://erp.example.com \
+  ganesh-erp
+```
+
+`BETTER_AUTH_URL`/`FRONTEND_URL` are the public origin (no path suffix). Caddy
+strips the app prefix before proxying to the backends and routes password-reset
+links to the correct app from the `callbackURL`. For separate backend deploys,
+use `docker/lokkhi.Dockerfile` and `fly.lokkhi.toml`; the frontend defaults to
+`LOKKHI_BASE_PATH=/` and proxies `/api` to `BACKEND_URL`.
 
 ## Packages
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ export default function ForgotPassword() {
     try {
       const result = await authClient.requestPasswordReset({
         email: email.trim(),
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}${withBasePath("/reset-password")}`,
       });
 
       if (result.error) {
@@ -44,7 +45,7 @@ export default function ForgotPassword() {
 
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
-          <img src="/brand/mushak.png" alt="Mushak" className="h-16 w-auto" />
+          <img src={withBasePath("/brand/mushak.png")} alt="Mushak" className="h-16 w-auto" />
           <p className="mt-3 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
             Shree Ganesh ERP
           </p>

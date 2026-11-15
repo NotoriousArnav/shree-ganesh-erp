@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import ThemeToggle from "@/components/theme-toggle";
@@ -7,7 +7,8 @@ import { authClient } from "@/lib/auth-client";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
-  const token = params.get("token");
+  const route = useParams();
+  const token = route.token ?? params.get("token");
   const linkError = params.get("error");
 
   const [password, setPassword] = useState("");

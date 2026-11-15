@@ -1,7 +1,9 @@
+import { withBasePath } from "@/lib/base-path";
+
 /** Same-origin URL for an object-storage image, or null when unset. */
 export function imageSrc(key: string | null | undefined): string | null {
   if (!key) return null;
-  return `/api/storage/objects/content?key=${encodeURIComponent(key)}`;
+  return withBasePath(`/api/storage/objects/content?key=${encodeURIComponent(key)}`);
 }
 
 type StoredObject = {
@@ -45,7 +47,7 @@ export async function uploadImage(
     prefix,
   });
 
-  const response = await fetch(`/api/storage/uploads?${params}`, {
+  const response = await fetch(withBasePath(`/api/storage/uploads?${params}`), {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/octet-stream" },

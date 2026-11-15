@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 
 type MerchantRow = {
   id: string;
@@ -43,7 +44,10 @@ const roleStyles: Record<string, string> = {
 };
 
 async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { credentials: "include", ...init });
+  const response = await fetch(withBasePath(path), {
+    credentials: "include",
+    ...init,
+  });
   if (!response.ok) {
     throw new Error(`Request failed with ${response.status}`);
   }

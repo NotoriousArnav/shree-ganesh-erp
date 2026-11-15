@@ -1,3 +1,5 @@
+import { withBasePath } from "@/lib/base-path";
+
 export class ApiError extends Error {
   status: number;
 
@@ -16,11 +18,14 @@ type RequestOptions = {
 /**
  * Small wrapper around the merchant API.
  *
+ * `path` is app-absolute (`/api/...`). On a deployment mounted under a path
+ * prefix, `withBasePath` keeps the request on the same public origin.
+ *
  * Only sets Content-Type when there is a body: Fastify rejects an empty body
  * that claims to be JSON.
  */
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(withBasePath(path), {
     method: options.method ?? "GET",
     credentials: "include",
     headers: options.body ? { "content-type": "application/json" } : undefined,

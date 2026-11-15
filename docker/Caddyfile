@@ -1,0 +1,131 @@
+# Unified ERP edge.
+#
+# One public origin serves both apps as path prefixes:
+#
+#   /mushak/api/*  -> Mushak backend  (prefix stripped, backend sees /api/*)
+#   /lokkhi/api/*  -> Lokkhi backend
+#   /mushak/*      -> Mushak SPA build (index.html fallback for client routes)
+#   /lokkhi/*      -> Lokkhi SPA build
+#
+# The backends register absolute `/api/...` routes and have no Fastify prefix,
+# so the proxy strips only `/<app>` and forwards the rest untouched. Both
+# backends run in the same container on private loopback ports.
+{
+	# No admin API: this process only proxies and serves files.
+	admin off
+	# TLS is terminated by the platform in front of the container.
+	auto_https off
+}
+
+:{$CADDY_PORT:8080} {
+	encode zstd gzip
+
+	# ---- Mushak backend-owned paths -------------------------------------
+	handle /mushak/api/* {
+		uri strip_prefix /mushak
+		reverse_proxy 127.0.0.1:{$MUSHAK_PORT:9080}
+	}
+
+	# Health, OpenAPI, Swagger UI and the MCP endpoint live beside the API,
+	# not under it, so they need their own prefix-stripping routes.
+	handle /mushak/health* {
+		uri strip_prefix /mushak
+		reverse_proxy 127.0.0.1:{$MUSHAK_PORT:9080}
+	}
+
+	handle /mushak/openapi.json {
+		uri strip_prefix /mushak
+		reverse_proxy 127.0.0.1:{$MUSHAK_PORT:9080}
+	}
+
+	handle /mushak/docs* {
+		uri strip_prefix /mushak
+		reverse_proxy 127.0.0.1:{$MUSHAK_PORT:9080}
+	}
+
+	handle /mushak/mcp* {
+		uri strip_prefix /mushak
+		reverse_proxy 127.0.0.1:{$MUSHAK_PORT:9080}
+	}
+
+	# ---- Lokkhi backend-owned paths -------------------------------------
+	handle /lokkhi/api/* {
+		uri strip_prefix /lokkhi
+		reverse_proxy 127.0.0.1:{$LOKKHI_PORT:9081}
+	}
+
+	handle /lokkhi/health* {
+		uri strip_prefix /lokkhi
+		reverse_proxy 127.0.0.1:{$LOKKHI_PORT:9081}
+	}
+
+	handle /lokkhi/openapi.json {
+		uri strip_prefix /lokkhi
+		reverse_proxy 127.0.0.1:{$LOKKHI_PORT:9081}
+	}
+
+	handle /lokkhi/docs* {
+		uri strip_prefix /lokkhi
+		reverse_proxy 127.0.0.1:{$LOKKHI_PORT:9081}
+	}
+
+	# ---- Password-reset links -------------------------------------------
+	# Better Auth keeps only the origin of BETTER_AUTH_URL, so it emails
+	# `<origin>/reset-password/<token>?callbackURL=/<app>/reset-password`.
+	# Send each link to the app named in `callbackURL`, with the token as a
+	# query parameter the reset page already understands. The browser URL then
+	# sits under the app's base path, which the SPA router needs.
+	@mushak_reset {
+		path_regexp reset ^/reset-password/(?P<token>[^/]+)$
+		expression `{query.callbackURL}.startsWith("/mushak/")`
+	}
+
+	# The leading `*` is a match-all inline matcher: without it Caddy reads the
+	# `/mushak/...` target as a path matcher and redirects to the literal "302".
+	handle @mushak_reset {
+		redir * "/mushak/reset-password?token={re.reset.token}" 302
+	}
+
+	@lokkhi_reset {
+		path_regexp reset ^/reset-password/(?P<token>[^/]+)$
+		expression `{query.callbackURL}.startsWith("/lokkhi/")`
+	}
+
+	handle @lokkhi_reset {
+		redir * "/lokkhi/reset-password?token={re.reset.token}" 302
+	}
+
+	# ---- SPA shells ------------------------------------------------------
+	# Vite emits content-hashed files under /assets, safe to cache forever.
+	handle_path /mushak/* {
+		root * /srv/mushak
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle_path /lokkhi/* {
+		root * /srv/lokkhi
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Bare /mushak or /lokkhi -> trailing slash so relative asset URLs resolve.
+	redir /mushak /mushak/ 308
+	redir /lokkhi /lokkhi/ 308
+
+	# Landing page: send visitors to the inventory app.
+	redir / /mushak/ 302
+
+	# Container-level health check, independent of either app.
+	handle /health {
+		respond "ok" 200
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

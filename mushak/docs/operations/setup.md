@@ -244,14 +244,45 @@ redirect rules, so the build command substitutes `BACKEND_URL` into the
 `BACKEND_PLACEHOLDER` before redirects are read. Set `FRONTEND_URL`,
 `BETTER_AUTH_URL` and `TRUSTED_ORIGINS` on the backend to the Netlify domain.
 
-### Vercel
+### Unified container (Caddy + both apps)
 
-`mushak/vercel.json` builds the same frontend on Vercel. Set the project's
-**Root Directory** to `mushak` (Vercel only reads `vercel.json` there), add
-`BACKEND_URL`, and deploy. The build runs from the repository root and publishes
-`frontend/dist`; `/api/*` is rewritten to `${BACKEND_URL}/api/*`. Leaving the
-Root Directory at the repository root builds every workspace and fails with
-`STATIC_BUILD_NO_OUT_DIR`.
+`docker/erp.Dockerfile` builds a single image that serves both SPAs and both
+Fastify APIs behind Caddy, separated by path prefix:
+
+- `/mushak/` and `/lokkhi/` — the frontend builds
+- `/mushak/api/*` and `/lokkhi/api/*` — the matching backends (Caddy strips the
+  app prefix so routes remain `/api/*`)
+- `/mushak/docs`, `/mushak/openapi.json`, `/mushak/mcp*`, `/lokkhi/docs`, etc.
+- `/` redirects to `/mushak/`; `/health` is a container-level check
+
+Build and run from the **repository root** (the context must include
+`packages/`):
+
+```bash
+docker build -f docker/erp.Dockerfile -t ganesh-erp .
+
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL=postgres://... \
+  -e BETTER_AUTH_SECRET=... \
+  -e BETTER_AUTH_URL=https://erp.example.com \
+  -e FRONTEND_URL=https://erp.example.com \
+  -e TRUSTED_ORIGINS=https://erp.example.com \
+  -e MAIL_DRIVER=smtp -e SMTP_HOST=... \
+  -e STORAGE_DRIVER=s3 -e S3_BUCKET=... \
+  ganesh-erp
+```
+
+Set `BETTER_AUTH_URL` and `FRONTEND_URL` to the public origin of the container
+(no path suffix). Better Auth emits reset links at that origin; Caddy routes
+`/reset-password/<token>` to the correct app using the `callbackURL` query the
+frontends supply. The two backends share the database and `BETTER_AUTH_SECRET`,
+so the same account and session work in both apps.
+
+Each backend also has a standalone image (`docker/mushak.Dockerfile`,
+`docker/lokkhi.Dockerfile`) and Fly config (`fly.mushak.toml`,
+`fly.lokkhi.toml`) for deploying the APIs separately. For a split deploy, build
+frontends with `MUSHAK_BASE_PATH=/` / `LOKKHI_BASE_PATH=/` (the defaults) and
+point `BACKEND_URL` at the matching backend origin.
 
 Production checklist:
 

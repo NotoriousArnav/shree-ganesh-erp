@@ -10,6 +10,7 @@ import InvoiceList from "@/routes/InvoiceList";
 import Login from "@/routes/Login";
 import PublicInvoice from "@/routes/PublicInvoice";
 import ResetPassword from "@/routes/ResetPassword";
+import { basePath } from "@/lib/base-path";
 import { startThemeWatcher } from "@/lib/theme";
 import "./index.css";
 
@@ -33,11 +34,12 @@ function InvoiceDetailRoute() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basePath || "/"}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route
           path="/"
           element={

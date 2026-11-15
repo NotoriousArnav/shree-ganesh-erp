@@ -41,7 +41,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route
-          path="/"
+          index
           element={
             <AppShell>
               <InvoiceList />

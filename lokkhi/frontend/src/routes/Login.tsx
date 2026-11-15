@@ -115,7 +115,14 @@ export default function Login() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/80">
-            Uses the same account as Mushak.
+            Uses the same account as{" "}
+            <a
+              href={import.meta.env.VITE_MUSHAK_APP_URL || "/"}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Mushak
+            </a>
+            .
           </p>
         </form>
       </div>

@@ -121,6 +121,13 @@ export default function MerchantLayout() {
               {item.label}
             </NavLink>
           ))}
+          <a
+            href={import.meta.env.VITE_LOKKHI_APP_URL || "/lokkhi/"}
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ReceiptIcon />
+            Lokkhi
+          </a>
         </nav>
 
         <div className="border-t p-3">
@@ -196,6 +203,13 @@ export default function MerchantLayout() {
                   {item.label}
                 </NavLink>
               ))}
+              <a
+                href={import.meta.env.VITE_LOKKHI_APP_URL || "/lokkhi/"}
+                className="flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <ReceiptIcon />
+                Lokkhi
+              </a>
             </nav>
             <ThemeToggle className="shrink-0" />
           </div>
@@ -298,6 +312,17 @@ function SettingsIcon() {
     <Icon>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a10 10 0 1 1-17.66-17.66l.06.06a1.65 1.65 0 0 0 1.82.33A1.65 1.65 0 0 0 13 22c0-3.87 3.13-7 7-7s7 3.13 7 7a1.65 1.65 0 0 0-.59 3Z" />
+    </Icon>
+  );
+}
+
+function ReceiptIcon() {
+  return (
+    <Icon>
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+      <path d="M14 8H8" />
+      <path d="M16 12H8" />
+      <path d="M13 16H8" />
     </Icon>
   );
 }

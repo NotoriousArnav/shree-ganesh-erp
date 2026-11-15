@@ -34,6 +34,15 @@ export default defineConfig({
           },
         ],
       },
+      workbox: {
+        // Keep new deploys from getting stuck behind an old cached shell.
+        clientsClaim: true,
+        skipWaiting: true,
+        // On the combined Vercel deployment Mushak is served at `/` and Lokkhi
+        // at `/lokkhi/` on the same origin. Exclude Lokkhi navigations so the
+        // root-scoped SW never hijacks or serves stale responses for it.
+        navigateFallbackDenylist: [/^\/lokkhi/],
+      },
     }),
     tailwindcss(),
   ],

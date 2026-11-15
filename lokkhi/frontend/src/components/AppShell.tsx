@@ -75,6 +75,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
               >
                 Purchases
               </Link>
+              <a
+                href={import.meta.env.VITE_MUSHAK_APP_URL || "/"}
+                className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                Mushak
+              </a>
               <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
               <ThemeToggle className="shrink-0" />
             </nav>

@@ -36,7 +36,8 @@ export default function Home() {
         </p>
         <h1 className="mt-2 text-4xl font-bold tracking-tight">Mushak</h1>
         <p className="mt-2 text-muted-foreground">
-          Inventory management for small merchants.
+          Inventory management for small merchants. Sales and purchase invoices
+          are in Lokkhi.
         </p>
       </div>
 
@@ -65,9 +66,14 @@ export default function Home() {
             ) : null}
             {isShop ? (
               <Button asChild>
-                <Link to="/app">Open shop</Link>
+                <Link to="/app">Open dashboard</Link>
               </Button>
             ) : null}
+            <Button variant="outline" asChild>
+              <a href={import.meta.env.VITE_LOKKHI_APP_URL || "/lokkhi/"}>
+                Open Lokkhi
+              </a>
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -79,9 +85,16 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link to="/login">Sign in</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <a href={import.meta.env.VITE_LOKKHI_APP_URL || "/lokkhi/"}>
+              Open Lokkhi
+            </a>
+          </Button>
+        </div>
       )}
     </main>
   );

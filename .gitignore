@@ -13,3 +13,5 @@ dist/
 /site/apps/*/hugo.toml
 
 site/**/.hugo_build.lock
+.vercel
+.env*

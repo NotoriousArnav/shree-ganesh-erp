@@ -1,0 +1,48 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/lokkhi/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(sw.js|registerSW.js)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/mushak" },
+    { "source": "/health", "destination": "/api/mushak" },
+    { "source": "/health/(.*)", "destination": "/api/mushak" },
+    { "source": "/openapi.json", "destination": "/api/mushak" },
+    { "source": "/mcp", "destination": "/api/mushak" },
+    { "source": "/lokkhi/api/(.*)", "destination": "/api/lokkhi" },
+    { "source": "/lokkhi/health", "destination": "/api/lokkhi" },
+    { "source": "/lokkhi/health/(.*)", "destination": "/api/lokkhi" },
+    { "source": "/lokkhi/openapi.json", "destination": "/api/lokkhi" },
+    { "source": "/lokkhi/(.*)", "destination": "/lokkhi/index.html" },
+    { "source": "/lokkhi", "destination": "/lokkhi/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

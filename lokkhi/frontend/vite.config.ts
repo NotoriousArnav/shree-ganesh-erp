@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  // Vercel builds deploy this app under /lokkhi; local development and the
+  // Netlify deployment keep it at the root.
+  base: process.env.LOKKHI_BASE_PATH ?? "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

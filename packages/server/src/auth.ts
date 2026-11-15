@@ -62,6 +62,16 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:8080",
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: buildAuthTrustedOrigins(),
+  advanced: {
+    ipAddress: {
+      // Behind a proxy every request arrives from the proxy's address, so auth
+      // rate limiting collapses into one global bucket and a stranger's failed
+      // logins throttle everyone. Fly's edge sets Fly-Client-IP and overwrites
+      // it, so the value cannot be spoofed by the client. Locally neither
+      // header exists and Better Auth falls back as before.
+      ipAddressHeaders: ["fly-client-ip", "x-forwarded-for"],
+    },
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

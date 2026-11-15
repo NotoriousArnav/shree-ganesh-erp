@@ -1,0 +1,36 @@
+# Mushak API — https://fly.io
+#
+# Deploy from the repo root so the build context includes the workspace packages:
+#   fly deploy --config fly.mushak.toml
+#
+# Runtime configuration (DATABASE_URL, BETTER_AUTH_SECRET, SMTP_*, S3_*) lives in
+# Fly secrets, never here:
+#   fly secrets set --config fly.mushak.toml KEY=value
+app = "ganesh-mushak-api"
+primary_region = "sin"
+
+[build]
+  dockerfile = "docker/mushak.Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[http_service.checks]]
+  grace_period = "15s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import ThemeToggle from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
+import { withBasePath } from "@/lib/base-path";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -19,7 +20,7 @@ export default function ForgotPassword() {
     try {
       const result = await authClient.requestPasswordReset({
         email: email.trim(),
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}${withBasePath("/reset-password")}`,
       });
 
       if (result.error) {

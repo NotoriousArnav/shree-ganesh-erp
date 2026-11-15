@@ -12,6 +12,8 @@
   ],
   "scripts": {
     "build:packages": "npm run build -w packages/db && npm run build -w packages/shared && npm run build -w packages/server",
+    "build:dist": "rm -rf dist && mkdir -p dist/lokkhi && npm run build:packages && npm run build -w mushak/backend && npm run build -w lokkhi/backend && npm run build -w mushak/frontend && LOKKHI_BASE_PATH=/lokkhi/ npm run build -w lokkhi/frontend && cp -r mushak/frontend/dist/* dist/ && cp -r lokkhi/frontend/dist/* dist/lokkhi/",
+    "build:vercel": "npm run build:dist",
     "build": "npm run build:packages && npm run build:mushak && npm run build:lokkhi",
     "dev:mushak": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w mushak/frontend\" \"npm run dev -w mushak/backend\"",
     "build:mushak": "npm run build -w mushak/frontend -w mushak/backend",

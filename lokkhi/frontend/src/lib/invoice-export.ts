@@ -1,5 +1,7 @@
 import { buildXlsx, rowsToCsv, type ExportCell, type ExportSheet } from "@ganesh/shared";
 
+import { withBasePath } from "@/lib/base-path";
+
 import type { Invoice } from "./types";
 
 /**
@@ -79,7 +81,9 @@ export function invoiceFilename(invoice: Invoice, extension: string) {
 
 /** A read-only link that works without signing in. */
 export function invoiceShareUrl(invoice: Pick<Invoice, "id">) {
-  return `${window.location.origin}/invoices/${invoice.id}?anon=true`;
+  return `${window.location.origin}${withBasePath(
+    `/invoices/${invoice.id}?anon=true`,
+  )}`;
 }
 
 function summaryRows(invoice: Invoice): ExportCell[][] {

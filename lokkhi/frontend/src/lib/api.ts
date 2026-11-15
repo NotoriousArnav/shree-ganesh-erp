@@ -1,3 +1,5 @@
+import { withBasePath } from "@/lib/base-path";
+
 export class ApiError extends Error {
   status: number;
 
@@ -13,12 +15,17 @@ type RequestOptions = {
   body?: unknown;
 };
 
-/** Same-origin API wrapper; Vite proxies /api to the Lokkhi backend. */
+/**
+ * Same-origin API wrapper; Vite proxies /api to the Lokkhi backend.
+ *
+ * `path` is app-absolute (`/api/...`). On a deployment mounted under a path
+ * prefix, `withBasePath` keeps the request on the same public origin.
+ */
 export async function api<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(withBasePath(path), {
     method: options.method ?? "GET",
     credentials: "include",
     headers: options.body ? { "content-type": "application/json" } : undefined,

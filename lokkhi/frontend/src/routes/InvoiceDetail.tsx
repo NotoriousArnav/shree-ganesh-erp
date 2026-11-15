@@ -224,7 +224,7 @@ export default function InvoiceDetail() {
           setMushakDraft(null);
         }}
         title="Add to Mushak"
-        description="Creates a catalogue item and links this line. The invoice keeps its original snapshot and totals."
+        description="Creates a catalogue item and links this line. For issued invoices, the matching stock movement is recorded in Mushak now; the invoice’s snapshot and totals stay unchanged."
       >
         {mushakDraft ? (
           <div className="space-y-3">

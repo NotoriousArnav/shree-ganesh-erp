@@ -1088,8 +1088,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       }
 
       try {
-        const created = await db.transaction(async (tx) => {
-          const [catalogue] = await tx
+        const catalogue = await db.transaction(async (tx) => {
+          const [created] = await tx
             .insert(catalogueItems)
             .values({
               merchantId,
@@ -1110,20 +1110,37 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
           await tx.insert(inventoryItems).values({
             merchantId,
-            catalogueItemId: catalogue.id,
+            catalogueItemId: created.id,
           });
 
           await tx
             .update(invoiceLines)
-            .set({ catalogueItemId: catalogue.id })
+            .set({
+              catalogueItemId: created.id,
+              // Once linked, stock can be synced for issued invoices.
+              stockSyncState:
+                line.stockSyncState === "synced" ? "synced" : "not_applicable",
+              stockSyncNote: null,
+            })
             .where(eq(invoiceLines.id, line.id));
 
-          return catalogue;
+          // For issued invoices, create the stock movement now so the shop
+          // doesn't have to do it manually (e.g. purchase from a salesman).
+          if (invoice.status === "issued" && line.stockSyncState !== "synced") {
+            await applyLineStock(
+              tx,
+              invoice,
+              { ...line, catalogueItemId: created.id },
+            );
+          }
+
+          return created;
         });
 
+        const detail = await loadInvoiceDetail(merchantId, invoice.id);
         return reply.code(201).send({
-          catalogueItem: created,
-          invoice: await loadInvoiceDetail(merchantId, invoice.id),
+          catalogueItem: { id: catalogue.id },
+          invoice: detail,
         });
       } catch (error) {
         if (isUniqueViolation(error)) {

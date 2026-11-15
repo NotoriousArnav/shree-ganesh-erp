@@ -90,6 +90,7 @@ export default function InvoiceEditor() {
   const [partyGstin, setPartyGstin] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([newLine()]);
+  const [merchantName, setMerchantName] = useState<string | null>(null);
 
   const [suggestFor, setSuggestFor] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -101,10 +102,22 @@ export default function InvoiceEditor() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
     let cancelled = false;
-    setLoading(true);
 
+    if (!id) {
+      api<{ merchant: { name: string } | null }>("/api/merchant/profile")
+        .then((data) => {
+          if (!cancelled) setMerchantName(data.merchant?.name ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setMerchantName(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
     api<Invoice>(`/api/merchant/invoices/${id}`)
       .then((invoice) => {
         if (cancelled) return;
@@ -120,6 +133,7 @@ export default function InvoiceEditor() {
         setPartyGstin(invoice.partyGstin ?? "");
         setNotes(invoice.notes ?? "");
         setLines(invoice.lines.length ? invoice.lines.map(toDraft) : [newLine()]);
+        setMerchantName(invoice.merchantName ?? invoice.issuerName ?? null);
       })
       .catch((cause) => {
         if (!cancelled) setError(errorMessage(cause));
@@ -352,19 +366,39 @@ export default function InvoiceEditor() {
         </Field>
 
         <Field
-          label={kind === "sale" ? "Customer" : "Supplier"}
-          required
-          hint="Name is required; phone is optional"
+          label={kind === "sale" ? "From (Seller)" : "From (Supplier)"}
+          hint={kind === "sale" ? "Your shop" : "External party"}
         >
-          <Input
-            value={partyName}
-            onChange={(event) => setPartyName(event.target.value)}
-            placeholder={kind === "sale" ? "Walk-in customer" : "Supplier name"}
-            required
-          />
+          {kind === "sale" ? (
+            <Input value={merchantName ?? "Your shop"} disabled readOnly />
+          ) : (
+            <Input
+              value={partyName}
+              onChange={(event) => setPartyName(event.target.value)}
+              placeholder="Supplier name"
+              required
+            />
+          )}
         </Field>
 
-        <Field label="Phone" hint="Optional, shown next to the name">
+        <Field
+          label={kind === "sale" ? "To (Customer)" : "To (Buyer)"}
+          hint={kind === "sale" ? "External party" : "Your shop"}
+          required={kind === "sale"}
+        >
+          {kind === "sale" ? (
+            <Input
+              value={partyName}
+              onChange={(event) => setPartyName(event.target.value)}
+              placeholder="Walk-in customer"
+              required
+            />
+          ) : (
+            <Input value={merchantName ?? "Your shop"} disabled readOnly />
+          )}
+        </Field>
+
+        <Field label="Party phone" hint="Optional">
           <Input
             value={partyPhone}
             onChange={(event) => setPartyPhone(event.target.value)}
@@ -372,7 +406,7 @@ export default function InvoiceEditor() {
           />
         </Field>
 
-        <Field label="GSTIN" hint="Optional">
+        <Field label="Party GSTIN" hint="Optional">
           <Input
             value={partyGstin}
             onChange={(event) => setPartyGstin(event.target.value)}
@@ -380,9 +414,9 @@ export default function InvoiceEditor() {
           />
         </Field>
 
-        <Field label="Notes" hint="Printed on the invoice" className="sm:col-span-2">
+        <Field label="Notes" hint="Printed on the invoice" className="sm:col-span-2 lg:col-span-4">
           <Textarea
-            rows={1}
+            rows={2}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />

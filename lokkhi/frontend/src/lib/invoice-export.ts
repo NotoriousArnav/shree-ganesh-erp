@@ -52,8 +52,12 @@ function kindLabel(invoice: Invoice) {
   return invoice.kind === "sale" ? "Sale" : "Purchase";
 }
 
-function partyLabel(invoice: Invoice) {
-  return invoice.kind === "sale" ? "Billed to" : "Supplier";
+function parties(invoice: Invoice) {
+  const merchant = invoice.merchantName ?? invoice.issuerName ?? "Your shop";
+  if (invoice.kind === "sale") {
+    return { from: merchant, to: invoice.partyName, fromLabel: "From (Seller)", toLabel: "To (Buyer)" };
+  }
+  return { from: invoice.partyName, to: merchant, fromLabel: "From (Supplier)", toLabel: "To (Buyer)" };
 }
 
 /** "INR 1,234.50" — safe in every export format, including standard PDF fonts. */
@@ -87,6 +91,7 @@ export function invoiceShareUrl(invoice: Pick<Invoice, "id">) {
 }
 
 function summaryRows(invoice: Invoice): ExportCell[][] {
+  const p = parties(invoice);
   const rows: ExportCell[][] = [
     ["Field", "Value"],
     ["Invoice", invoice.number ?? `${kindLabel(invoice)} draft`],
@@ -94,9 +99,10 @@ function summaryRows(invoice: Invoice): ExportCell[][] {
     ["Status", invoice.status],
     ["Invoice date", invoice.invoiceDate],
     ["Due date", invoice.dueDate ?? ""],
-    [partyLabel(invoice), invoice.partyName],
-    ["Phone", invoice.partyPhone ?? ""],
-    ["GSTIN", invoice.partyGstin ?? ""],
+    [p.fromLabel, p.from],
+    [p.toLabel, p.to],
+    ["Party phone", invoice.partyPhone ?? ""],
+    ["Party GSTIN", invoice.partyGstin ?? ""],
     ["Currency", invoice.currency],
     ["Subtotal", invoice.subtotal],
     ["Discount", invoice.discountTotal],
@@ -161,9 +167,11 @@ export function invoiceXlsx(invoice: Invoice) {
 /** A short, human summary used by the share sheet and messaging links. */
 export function shareText(invoice: Invoice) {
   const reference = invoice.number ?? `${kindLabel(invoice)} draft`;
+  const p = parties(invoice);
   const lines = [
     `${kindLabel(invoice)} invoice ${reference}`,
-    `${partyLabel(invoice)}: ${invoice.partyName}`,
+    `${p.fromLabel}: ${p.from}`,
+    `${p.toLabel}: ${p.to}`,
     `Date: ${invoice.invoiceDate}`,
     `Total: ${plainMoney(invoice.total, invoice.currency)}`,
   ];

@@ -55,6 +55,9 @@ export type Invoice = {
   createdAt: string;
   updatedAt: string;
   lines: InvoiceLine[];
+  /** Shop name (counterpart party), returned by detail/public APIs. */
+  merchantName?: string | null;
+  issuerName?: string | null;
 };
 
 export type InvoiceListItem = Omit<Invoice, "lines"> & {

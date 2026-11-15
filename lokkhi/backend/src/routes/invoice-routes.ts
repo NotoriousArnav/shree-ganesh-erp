@@ -213,9 +213,10 @@ async function recalculateInvoice(tx: Tx, invoiceId: string) {
 }
 
 async function loadInvoiceDetail(merchantId: string | null, id: string) {
-  const [invoice] = await db
-    .select()
+  const [row] = await db
+    .select({ invoice: invoices, merchantName: merchants.name })
     .from(invoices)
+    .leftJoin(merchants, eq(merchants.id, invoices.merchantId))
     .where(
       merchantId
         ? and(eq(invoices.id, id), eq(invoices.merchantId, merchantId))
@@ -223,7 +224,8 @@ async function loadInvoiceDetail(merchantId: string | null, id: string) {
     )
     .limit(1);
 
-  if (!invoice) return null;
+  if (!row) return null;
+  const { invoice, merchantName } = row;
 
   const rows = await db
     .select({
@@ -247,6 +249,7 @@ async function loadInvoiceDetail(merchantId: string | null, id: string) {
 
   return {
     ...invoice,
+    merchantName: merchantName ?? null,
     lines: rows.map(({ line, catalogueId, catalogueActive, catalogueName, catalogueStock }) => ({
       ...line,
       catalogueItem: catalogueId
@@ -401,6 +404,17 @@ function stockConflictMessage(error: unknown) {
 
 export async function registerInvoiceRoutes(app: FastifyInstance) {
   const scoped = requireMerchant();
+
+  app.get("/api/merchant/profile", { preHandler: scoped }, async (request) => {
+    const merchantId = merchantIdOf(request);
+    const [merchant] = await db
+      .select({ id: merchants.id, name: merchants.name, gstin: merchants.gstin, phone: merchants.phone })
+      .from(merchants)
+      .where(eq(merchants.id, merchantId))
+      .limit(1);
+
+    return { merchant: merchant ?? null };
+  });
 
   // ---- Suggestions --------------------------------------------------------
 
@@ -573,6 +587,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         .where(eq(merchants.id, invoice.merchantId))
         .limit(1);
 
+      const merchantName = merchant?.name ?? invoice.merchantName ?? null;
       return {
         id: invoice.id,
         kind: invoice.kind,
@@ -595,7 +610,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         voidedAt: invoice.voidedAt,
         createdAt: invoice.createdAt,
         updatedAt: invoice.updatedAt,
-        issuerName: merchant?.name ?? null,
+        merchantName,
+        issuerName: merchantName,
         lines: invoice.lines.map((line) => ({
           id: line.id,
           invoiceId: line.invoiceId,

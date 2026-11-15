@@ -31,33 +31,56 @@ export default function InvoiceDocument({
   busy?: boolean;
 }) {
   const showHints = Boolean(onAddToMushak || onRetryStock);
+  const merchantName = invoice.merchantName ?? invoice.issuerName ?? "Your shop";
+  const sellerName = invoice.kind === "sale" ? merchantName : invoice.partyName;
+  const buyerName = invoice.kind === "sale" ? invoice.partyName : merchantName;
+  const sellerPhone = invoice.kind === "sale" ? null : invoice.partyPhone;
+  const buyerPhone = invoice.kind === "sale" ? invoice.partyPhone : null;
+  const sellerGstin = invoice.kind === "sale" ? null : invoice.partyGstin;
+  const buyerGstin = invoice.kind === "sale" ? invoice.partyGstin : null;
 
   return (
     <article className="invoice-document overflow-hidden rounded-2xl border border-border bg-card">
-      <header className="invoice-header flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
-            {invoice.kind === "sale" ? "Sales invoice" : "Purchase invoice"}
-          </p>
-          <p className="mt-1 text-lg font-semibold">
-            {invoice.number ?? "Draft — not numbered yet"}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {dateLabel(invoice.invoiceDate)}
-            {invoice.dueDate ? ` · due ${dateLabel(invoice.dueDate)}` : ""}
-          </p>
+      <header className="invoice-header border-b border-border px-6 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
+              {invoice.kind === "sale" ? "Sales invoice" : "Purchase invoice"}
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              {invoice.number ?? "Draft — not numbered yet"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {dateLabel(invoice.invoiceDate)}
+              {invoice.dueDate ? ` · due ${dateLabel(invoice.dueDate)}` : ""}
+            </p>
+          </div>
         </div>
-        <div className="text-right text-sm">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
-            {invoice.kind === "sale" ? "Billed to" : "Supplier"}
-          </p>
-          <p className="font-medium">{invoice.partyName}</p>
-          {invoice.partyPhone ? (
-            <p className="text-muted-foreground">{invoice.partyPhone}</p>
-          ) : null}
-          {invoice.partyGstin ? (
-            <p className="text-muted-foreground">GSTIN {invoice.partyGstin}</p>
-          ) : null}
+        <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
+              From (Seller)
+            </p>
+            <p className="font-medium">{sellerName}</p>
+            {sellerPhone ? (
+              <p className="text-muted-foreground">{sellerPhone}</p>
+            ) : null}
+            {sellerGstin ? (
+              <p className="text-muted-foreground">GSTIN {sellerGstin}</p>
+            ) : null}
+          </div>
+          <div className="sm:text-right">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground/70">
+              To (Buyer)
+            </p>
+            <p className="font-medium">{buyerName}</p>
+            {buyerPhone ? (
+              <p className="text-muted-foreground">{buyerPhone}</p>
+            ) : null}
+            {buyerGstin ? (
+              <p className="text-muted-foreground">GSTIN {buyerGstin}</p>
+            ) : null}
+          </div>
         </div>
       </header>
 

@@ -277,28 +277,49 @@ export async function invoicePdf(invoice: Invoice): Promise<Uint8Array> {
     color: muted,
   });
 
-  // Party block, right aligned.
-  const partyLabel = invoice.kind === "sale" ? "Billed to" : "Supplier";
-  const right = MARGIN + tableWidth;
-  drawRight(page, fonts.bold, 8, partyLabel.toUpperCase(), right, cursor.y - 8, muted);
+  // Party blocks: From (seller) and To (buyer).
+  const merchantName = invoice.merchantName ?? invoice.issuerName ?? "Your shop";
+  const sellerName = invoice.kind === "sale" ? merchantName : invoice.partyName;
+  const buyerName = invoice.kind === "sale" ? invoice.partyName : merchantName;
+  const sellerPhone = invoice.kind === "sale" ? null : invoice.partyPhone;
+  const buyerPhone = invoice.kind === "sale" ? invoice.partyPhone : null;
+  const sellerGstin = invoice.kind === "sale" ? null : invoice.partyGstin;
+  const buyerGstin = invoice.kind === "sale" ? invoice.partyGstin : null;
 
-  let partyY = cursor.y - 24;
-  for (const text of wrap(invoice.partyName, fonts.bold, 11, 240)) {
+  const leftX = MARGIN;
+  const right = MARGIN + tableWidth;
+  const colWidth = 240;
+
+  page.drawText("FROM (SELLER)", { x: leftX, y: cursor.y - 62, size: 8, font: fonts.bold, color: muted });
+  drawRight(page, fonts.bold, 8, "TO (BUYER)", right, cursor.y - 62, muted);
+
+  let leftY = cursor.y - 78;
+  for (const text of wrap(sellerName, fonts.bold, 11, colWidth)) {
+    page.drawText(text, { x: leftX, y: leftY, size: 11, font: fonts.bold, color: ink });
+    leftY -= 13;
+  }
+  for (const value of [sellerPhone, sellerGstin ? `GSTIN ${sellerGstin}` : null]) {
+    if (!value) continue;
+    for (const text of wrap(value, fonts.regular, 8.5, colWidth)) {
+      page.drawText(text, { x: leftX, y: leftY, size: 8.5, font: fonts.regular, color: muted });
+      leftY -= 11;
+    }
+  }
+
+  let partyY = cursor.y - 78;
+  for (const text of wrap(buyerName, fonts.bold, 11, colWidth)) {
     drawRight(page, fonts.bold, 11, text, right, partyY);
     partyY -= 13;
   }
-  for (const value of [
-    invoice.partyPhone,
-    invoice.partyGstin ? `GSTIN ${invoice.partyGstin}` : null,
-  ]) {
+  for (const value of [buyerPhone, buyerGstin ? `GSTIN ${buyerGstin}` : null]) {
     if (!value) continue;
-    for (const text of wrap(value, fonts.regular, 8.5, 240)) {
+    for (const text of wrap(value, fonts.regular, 8.5, colWidth)) {
       drawRight(page, fonts.regular, 8.5, text, right, partyY, muted);
       partyY -= 11;
     }
   }
 
-  cursor.y = Math.min(cursor.y - 62, partyY - 8);
+  cursor.y = Math.min(leftY, partyY) - 8;
   drawTableHead(cursor, fonts);
 
   for (let index = 0; index < invoice.lines.length; index += 1) {

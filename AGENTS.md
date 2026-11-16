@@ -1,103 +1,33 @@
 # AGENTS.md
 
-Four-workspace npm monorepo (`packages/*` + two app pairs). No root `tsconfig`, no
-linter, no formatter. The only automated check is `npm test`.
+npm workspaces monorepo: `packages/*`, `mushak/{frontend,backend}`, `lokkhi/{frontend,backend}`. No root `tsconfig`, linter, or formatter.
 
-## Commands
+## Commands (run from repo root unless noted)
 
-```bash
-npm run build:packages   # ALWAYS before dev/build/start of any app
-npm test                 # node:test via tsx; 27 tests in 4 files
-npm run db:up            # Postgres 17 + RustFS (S3) via mushak/backend/docker-compose.yml
-npm run db:migrate
-npm run dev:mushak       # 5173 + 8080
-npm run dev:lokkhi       # 5175 + 8081
-```
+- `npm ci` / `npm install` — install all workspaces.
+- `npm run build:packages` — build `packages/db`, `packages/shared`, `packages/server` (`dist/`). **Required before dev/build/start** of any app and after editing `packages/*/src`.
+- `npm run dev:mushak` — Mushak web+api (5173 + 8080). `npm run dev:lokkhi` — Lokkhi web+api (5175 + 8081).
+- `npm test` — `node --import tsx --test "mushak/**/*.test.ts" "lokkhi/**/*.test.ts" "packages/shared/src/**/*.test.ts"` (27 tests total currently).
+  - Single file: `node --import tsx --test mushak/frontend/src/lib/range.test.ts`
+  - Per app: `npm run test:mushak` / `npm run test:lokkhi`.
+- `npm run db:up` / `db:down` / `db:migrate` / `db:studio` — proxied to `mushak/backend` (Postgres 17 + RustFS compose in `mushak/backend/docker-compose.yml`).
+- `npm run seed:admin`, `seed:demo`, `user:create -- ...`, `mail:test` — scripts run via `mushak/backend`.
+- `npm run docs:openapi` / `docs:all` — OpenAPI export and Hugo docs (`scripts/build-docs.mjs`, needs Hugo theme clone/network in CI context).
 
-Single test file: `node --import tsx --test mushak/frontend/src/lib/range.test.ts`
+## High-signal gotchas
 
-Tests are only collected from these globs: `mushak/**/*.test.ts`,
-`lokkhi/**/*.test.ts`, `packages/shared/src/**/*.test.ts`. A test placed in
-`packages/db` or `packages/server` silently never runs — add it under one of
-those three paths or extend the root `test` script.
+- **Shared packages resolve to `dist/`, not `src/`**: `@ganesh/*` export `./dist/*.js`. Changes in `packages/*/src` do nothing until `npm run build:packages`.
+- **Hoisted/undeclared dep**: `mushak/frontend` imports `@ganesh/shared` but does not declare it in its `package.json` (works via workspace hoisting). Do not switch Dockerfiles/install commands to scoped `--workspace` installs without adding that dependency.
+- **Tests are glob-limited**: root `test` only collects `mushak/**/*.test.ts`, `lokkhi/**/*.test.ts`, `packages/shared/src/**/*.test.ts`. Tests under `packages/db` or `packages/server` (or elsewhere) will not run unless moved into those globs or the script is extended.
+- **Backend shape**: each backend has `src/app.mts` exporting the Fastify instance (no `listen`) and `src/index.ts` as the only `listen()` entrypoint — keep both. Routes register absolute paths (e.g. `/api/merchant/...`); there is no route `prefix`, so new route files must include `/api`.
+- **Shared auth/env side effects**: `src/env.ts` sets `process.env.APP_NAME` (module side effect) because `packages/server/src/auth.ts` is shared and reads `APP_NAME` for mail copy. `/docs` (swagger-ui) is skipped when `VERCEL` is set and `@fastify/swagger-ui` is loaded dynamically (ESM/`require(ESM)` issue with `content-disposition`). Mushak has `/mcp`; Lokkhi does not.
+- **One DB, one schema, one migration history**: schema is `packages/db/src/schema.ts`; migrations live in `packages/db/drizzle/`. Never add a second schema or migrations dir. Generate migrations from `mushak/backend` (its `drizzle.config.ts` targets shared schema/env): `npm run db:generate -w mushak/backend`, then `npm run db:migrate`. DB client uses `max: 1` + `prepare: false` intentionally for pooled URLs (Neon/PgBouncer).
+- **Auth/tenancy**: public sign-up is off (`ALLOW_SIGNUP` opt-in); accounts come from `seed:admin` / `user:create`. `merchant`/`staff` users need `users.merchant_id` or API calls fail. Merchant scope comes from session (`request.merchantAccess.merchantId`), never request body. Both apps share one Postgres and the same `BETTER_AUTH_SECRET` (same account works in both). `TRUSTED_ORIGINS` drives Better Auth origin checks (`*` disables checks, logs warning); CORS is permissive (`origin: true` + credentials) and is not access control. In non-production, trusted origins include loopback/LAN IPv4 for device testing. `advanced.ipAddress.ipAddressHeaders` includes `fly-client-ip` (needed for correct rate limiting behind proxies).
+- **Frontend base paths/build variants**: `MUSHAK_BASE_PATH`/`LOKKHI_BASE_PATH` default `/`. Unified container builds use `/mushak/` and `/lokkhi/` (`docker/erp.Dockerfile`). Vercel combined build (`npm run build:dist`/`build:vercel`, root `vercel.json`, `api/*`) serves Mushak at `/` and Lokkhi at `/lokkhi/` (`LOKKHI_BASE_PATH=/lokkhi/`). Vite dev/preview proxy `/api` to local backends (8080/8081).
 
-## Shared packages resolve to `dist/`, not `src`
+## Deploy / CI (current)
 
-`@ganesh/*` packages point `main`/`exports` at `./dist/*.js`, and there is no
-watch build. Editing `packages/*/src` has **no effect** until
-`npm run build:packages` runs again. This is the most common "my change does
-nothing" trap.
-
-`mushak/frontend` imports `@ganesh/shared` but does not declare it in its
-`package.json` — it works only because npm hoists all workspaces. Do not switch
-any Dockerfile or install command to scoped `--workspace` installs without
-adding that dependency first.
-
-## Backend shape
-
-- `src/app.mts` exports the Fastify instance (default export, no socket);
-  `src/index.ts` is the only `listen()`. Keep both.
-- Routes register absolute paths like `/api/merchant/...`; there is no
-  `prefix` option, so a new route file must include `/api` itself.
-- `src/env.ts` sets `process.env.APP_NAME` as a module side effect — required
-  because `packages/server/src/auth.ts` is shared by both apps and reads
-  `APP_NAME` for mail copy.
-- `/docs` (swagger-ui) is skipped when `process.env.VERCEL` is set, and
-  `@fastify/swagger-ui` is imported dynamically, because its `content-disposition`
-  dependency is ESM-only under runtimes that disable `require(ESM)`.
-- `/mcp` exists on Mushak only. `[boot] ...` console lines and the 10s boot
-  watchdog are leftover Vercel diagnostics, safe to remove.
-- Both apps share one Postgres and the same `BETTER_AUTH_SECRET`; the account
-  created in one works in the other.
-
-## Database
-
-- One schema for both apps: `packages/db/src/schema.ts`. One migration history:
-  `packages/db/drizzle/`. Never create a second schema or migrations dir.
-- Generate from the backend, not the package:
-  `npm run db:generate -w mushak/backend` (its `drizzle.config.ts` points at the
-  shared schema and the local env file). Then `npm run db:migrate`.
-- The client uses `max: 1` + `prepare: false` on purpose, so pooled URLs
-  (Neon/PgBouncer) work. Don't add a `max` bump.
-
-## Auth gotchas
-
-- Public sign-up is off (`ALLOW_SIGNUP` opt-in). Accounts come from
-  `npm run seed:admin` / `npm run user:create`. `merchant` and `staff` accounts
-  need `users.merchant_id` set or every API call fails.
-- Merchant scope always comes from the session, never the request body.
-- `TRUSTED_ORIGINS` feeds Better Auth's origin checks; `*` turns those checks
-  off and logs a warning at boot. CORS is separate and permissive everywhere
-  (`origin: true` + credentials, reflecting the caller's origin) — it is not
-  access control, every route still authenticates.
-- When `NODE_ENV !== production`, `buildTrustedOrigins()` adds loopback and all
-  LAN IPv4 addresses of the dev machine, so a phone on the same Wi-Fi can sign
-  in; production uses only the configured origins.
-- `advanced.ipAddress.ipAddressHeaders` includes `fly-client-ip` — without it,
-  rate limiting collapses into one global bucket behind any proxy.
-
-## Deploy state
-
-- **Unified container:** `docker/erp.Dockerfile` builds Caddy + both backends +
-  both SPA builds from the **repo root**. Public paths: `/mushak/*`, `/lokkhi/*`,
-  `/mushak/api/*`, `/lokkhi/api/*` (Caddy strips the app prefix so backends keep
-  `/api/*` routes), plus `/health`, `/mushak/docs|openapi.json|mcp*`,
-  `/lokkhi/docs|openapi.json|health*`. Frontends are built with
-  `MUSHAK_BASE_PATH=/mushak/` and `LOKKHI_BASE_PATH=/lokkhi/`.
-- **Split backends:** `docker/{mushak,lokkhi}.Dockerfile` from repo root,
-  `.dockerignore` keeps `.env*` out. `fly.{mushak,lokkhi}.toml` use region `sin`,
-  port 8080, auto-stop. Deploy: `fly deploy --config fly.mushak.toml`.
-- **Frontends:** one Netlify site each. `netlify.toml` build `sed`s
-  `BACKEND_PLACEHOLDER` with `BACKEND_URL`; missing `BACKEND_URL` must fail.
-  `MUSHAK_BASE_PATH`/`LOKKHI_BASE_PATH` default `/` for standalone/frontend-only
-  deploys.
-- **Abandoned:** `mushak/backend/vercel.json`, `lokkhi/backend/vercel.json`, the
-  `build:vercel` esbuild scripts, and Vercel services docs. Vercel never served
-  a successful invocation; Docker is the working path.
-
-## Docs
-
-`npm run docs:all` builds Hugo sites from `mushak/docs` and `lokkhi/docs` into
-`dist/docs/`, cloning the `hugo-book` theme. CI (`.github/workflows`) runs
-`npm test` on every push to `master`, then builds docs and publishes to GitHub
-Pages. Docs edits belong in `<app>/docs/`, never in `dist/` or `site/`.
+- **Unified container**: `docker/erp.Dockerfile` + `docker/Caddyfile` + `docker/entrypoint.sh` (build from repo root). Serves `/`, `/mushak/*`, `/lokkhi/*`, proxied app APIs/docs/health/mcp with app-prefix stripping to backend `/api/*` routes.
+- **Split backends**: `docker/{mushak,lokkhi}.Dockerfile` (repo-root context), `fly.{mushak,lokkhi}.toml`. Frontends can deploy separately (e.g. Netlify per app; `BACKEND_URL` substitution in app `netlify.toml`).
+- **Vercel (combined)**: root `vercel.json` routes `/api/*`+Mushak paths to `api/mushak`, `/lokkhi/api/*`+Lokkhi paths to `api/lokkhi`, with SPA rewrites/headers; build via `npm run build:vercel` (`build:dist`).
+- **CI**: `.github/workflows/docs.yml` — `npm ci` + `npm test` on push to `master` and PRs; on non-PR runs also builds docs and deploys `dist/docs` to GitHub Pages. Edit docs in `<app>/docs/` (not `dist/`/`site/`).

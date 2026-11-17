@@ -515,6 +515,64 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       .limit(10);
   });
 
+  /**
+   * Suggest past customers/suppliers from invoice snapshots.
+   * Filtered by kind (sale => customers, purchase => suppliers) when provided.
+   */
+  app.get("/api/merchant/invoices/party-suggestions", { preHandler: scoped }, async (request) => {
+    const merchantId = merchantIdOf(request);
+    const query = request.query as { q?: string; kind?: string };
+    const search = query.q?.trim();
+
+    if (!search || search.length < 2) return [];
+
+    const kind =
+      query.kind === "sale" || query.kind === "purchase" ? query.kind : undefined;
+    const pattern = `%${search}%`;
+
+    const whereParts = [
+      eq(invoices.merchantId, merchantId),
+      ilike(invoices.partyName, pattern),
+    ];
+    if (kind) whereParts.push(eq(invoices.kind, kind));
+
+    const rows = await db
+      .select({
+        partyName: invoices.partyName,
+        partyPhone: invoices.partyPhone,
+        partyGstin: invoices.partyGstin,
+        partyAddress: invoices.partyAddress,
+        createdAt: invoices.createdAt,
+      })
+      .from(invoices)
+      .where(and(...whereParts))
+      .orderBy(desc(invoices.createdAt))
+      .limit(50);
+
+    const seen = new Set<string>();
+    const out: {
+      partyName: string;
+      partyPhone: string | null;
+      partyGstin: string | null;
+      partyAddress: Record<string, string> | null;
+    }[] = [];
+
+    for (const row of rows) {
+      const key = row.partyName.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        partyName: row.partyName,
+        partyPhone: row.partyPhone,
+        partyGstin: row.partyGstin,
+        partyAddress: (row.partyAddress as Record<string, string> | null) ?? null,
+      });
+      if (out.length >= 10) break;
+    }
+
+    return out;
+  });
+
   // ---- List ---------------------------------------------------------------
 
   app.get("/api/merchant/invoices", { preHandler: scoped }, async (request) => {
@@ -1101,6 +1159,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     purchasePrice: z.coerce.number().min(0).max(10_000_000).optional(),
     sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
     categoryId: z.uuid().nullish(),
+    /** If set (and no categoryId), find or create a category by name. */
+    categoryName: optionalText(120),
   });
 
   app.post<{ Params: { id: string; lineId: string } }>(
@@ -1158,21 +1218,63 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             ? legacyPrice
             : 0;
       const sku = input.sku ?? (await generateSku(merchantId, name));
+      const categoryName = input.categoryId ? null : input.categoryName?.trim() || null;
 
       try {
         const catalogue = await db.transaction(async (tx) => {
-          if (input.categoryId) {
+          let resolvedCategoryId: string | null = input.categoryId ?? null;
+
+          if (resolvedCategoryId) {
             const [cat] = await tx
               .select({ id: categories.id })
               .from(categories)
               .where(
                 and(
-                  eq(categories.id, input.categoryId),
+                  eq(categories.id, resolvedCategoryId),
                   eq(categories.merchantId, merchantId),
                 ),
               )
               .limit(1);
             if (!cat) throw new Error("CATEGORY_NOT_FOUND");
+          } else if (categoryName) {
+            const [existing] = await tx
+              .select({ id: categories.id })
+              .from(categories)
+              .where(
+                and(
+                  eq(categories.merchantId, merchantId),
+                  ilike(categories.name, categoryName),
+                ),
+              )
+              .limit(1);
+            if (existing) {
+              resolvedCategoryId = existing.id;
+            } else {
+              try {
+                const [createdCat] = await tx
+                  .insert(categories)
+                  .values({ merchantId, name: categoryName, parentId: null })
+                  .returning({ id: categories.id });
+                resolvedCategoryId = createdCat.id;
+              } catch (e) {
+                if (isUniqueViolation(e)) {
+                  const [again] = await tx
+                    .select({ id: categories.id })
+                    .from(categories)
+                    .where(
+                      and(
+                        eq(categories.merchantId, merchantId),
+                        ilike(categories.name, categoryName),
+                      ),
+                    )
+                    .limit(1);
+                  if (again) resolvedCategoryId = again.id;
+                  else throw e;
+                } else {
+                  throw e;
+                }
+              }
+            }
           }
 
           const [created] = await tx
@@ -1189,7 +1291,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
               // never rewritten, so historical totals cannot change.
               purchasePrice,
               sellingPrice,
-              categoryId: input.categoryId ?? null,
+              categoryId: resolvedCategoryId,
             })
             .returning();
 

@@ -8,7 +8,6 @@ import {
   ErrorNote,
   Field,
   Input,
-  Select,
 } from "@/components/ui";
 import ExportDialog from "@/components/export-dialog";
 import InvoiceDocument from "@/components/invoice-document";
@@ -25,6 +24,8 @@ type MushakDraft = {
   purchasePrice: string;
   sellingPrice: string;
   categoryId: string;
+  categoryName: string;
+  categoryText: string;
 };
 
 type CategoryOption = { id: string; name: string };
@@ -44,6 +45,7 @@ export default function InvoiceDetail() {
   const [mushakError, setMushakError] = useState<string | null>(null);
   const [mushakBusy, setMushakBusy] = useState(false);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -90,6 +92,7 @@ export default function InvoiceDetail() {
     if (!invoice) return;
     setMushakLine(line);
     setMushakError(null);
+    setCategoryOpen(false);
     const linePrice = String(line.unitPrice);
     setMushakDraft({
       name: line.itemName,
@@ -101,6 +104,8 @@ export default function InvoiceDetail() {
       purchasePrice: invoice.kind === "purchase" ? linePrice : "0",
       sellingPrice: invoice.kind === "sale" ? linePrice : "0",
       categoryId: "",
+      categoryName: "",
+      categoryText: "",
     });
   }
 
@@ -125,12 +130,17 @@ export default function InvoiceDetail() {
             purchasePrice: Number(mushakDraft.purchasePrice) || 0,
             sellingPrice: Number(mushakDraft.sellingPrice) || 0,
             categoryId: mushakDraft.categoryId || null,
+            categoryName:
+              !mushakDraft.categoryId && mushakDraft.categoryText.trim()
+                ? mushakDraft.categoryText.trim()
+                : null,
           },
         },
       );
       setInvoice(result.invoice);
       setMushakLine(null);
       setMushakDraft(null);
+      setCategoryOpen(false);
     } catch (cause) {
       setMushakError(errorMessage(cause));
     } finally {
@@ -261,23 +271,95 @@ export default function InvoiceDetail() {
             </Field>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Category" hint="Optional">
-                <Select
-                  value={mushakDraft.categoryId}
-                  onChange={(event) =>
-                    setMushakDraft({
-                      ...mushakDraft,
-                      categoryId: event.target.value,
-                    })
-                  }
-                >
-                  <option value="">No category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Category" hint="Search existing or type a new name">
+                <div className="relative">
+                  <Input
+                    value={mushakDraft.categoryText}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const match = categories.find(
+                        (c) => c.name.toLowerCase() === value.trim().toLowerCase(),
+                      );
+                      setMushakDraft({
+                        ...mushakDraft,
+                        categoryText: value,
+                        categoryId: match?.id ?? "",
+                        categoryName: match ? "" : value.trim(),
+                      });
+                      setCategoryOpen(true);
+                    }}
+                    onFocus={() => setCategoryOpen(true)}
+                    onBlur={() => setTimeout(() => setCategoryOpen(false), 120)}
+                    placeholder="Type to search or create"
+                    autoComplete="off"
+                  />
+                  {categoryOpen ? (
+                    <div className="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-border bg-card shadow-lg">
+                      {(() => {
+                        const q = mushakDraft.categoryText.trim().toLowerCase();
+                        const filtered = q
+                          ? categories.filter((c) =>
+                              c.name.toLowerCase().includes(q),
+                            )
+                          : categories;
+                        const exact = categories.find(
+                          (c) => c.name.toLowerCase() === q,
+                        );
+                        const showCreate = q.length > 0 && !exact;
+
+                        if (filtered.length === 0 && !showCreate) {
+                          return (
+                            <p className="px-3 py-2 text-xs text-muted-foreground">
+                              No categories yet. Type a name to create one.
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <>
+                            {filtered.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setMushakDraft({
+                                    ...mushakDraft,
+                                    categoryId: c.id,
+                                    categoryName: "",
+                                    categoryText: c.name,
+                                  });
+                                  setCategoryOpen(false);
+                                }}
+                                className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-muted/60"
+                              >
+                                {c.name}
+                              </button>
+                            ))}
+                            {showCreate ? (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setMushakDraft({
+                                    ...mushakDraft,
+                                    categoryId: "",
+                                    categoryName: mushakDraft.categoryText.trim(),
+                                    categoryText: mushakDraft.categoryText,
+                                  });
+                                  setCategoryOpen(false);
+                                }}
+                                className="flex w-full items-center px-3 py-2 text-left text-sm text-primary hover:bg-muted/60"
+                              >
+                                Create “{mushakDraft.categoryText.trim()}”
+                              </button>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+                </div>
               </Field>
               <Field label="Unit">
                 <Input

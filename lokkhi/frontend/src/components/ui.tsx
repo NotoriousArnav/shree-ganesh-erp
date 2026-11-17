@@ -173,7 +173,7 @@ export function Dialog({
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl">
+      <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl">
         <div className="mb-4 space-y-1">
           <h2 className="text-lg font-semibold">{title}</h2>
           {description ? (

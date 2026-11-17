@@ -17,6 +17,7 @@ import { z } from "zod";
 import { db } from "@ganesh/db";
 import {
   catalogueItems,
+  categories,
   inventoryItems,
   invoiceKindValues,
   invoiceLines,
@@ -402,6 +403,40 @@ function stockConflictMessage(error: unknown) {
   return "That SKU or barcode is already used by another product";
 }
 
+function skuBase(name: string) {
+  const words = name
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const base = words.join("-").slice(0, 24).replace(/-+$/, "");
+  return base || "ITEM";
+}
+
+async function generateSku(merchantId: string, name: string) {
+  const base = skuBase(name);
+
+  for (let suffix = 1; suffix <= 999; suffix += 1) {
+    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
+    const [taken] = await db
+      .select({ id: catalogueItems.id })
+      .from(catalogueItems)
+      .where(
+        and(
+          eq(catalogueItems.merchantId, merchantId),
+          eq(catalogueItems.sku, candidate),
+        ),
+      )
+      .limit(1);
+
+    if (!taken) return candidate;
+  }
+
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 export async function registerInvoiceRoutes(app: FastifyInstance) {
   const scoped = requireMerchant();
 
@@ -414,6 +449,23 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       .limit(1);
 
     return { merchant: merchant ?? null };
+  });
+
+  app.get("/api/merchant/categories", { preHandler: scoped }, async (request) => {
+    const merchantId = merchantIdOf(request);
+
+    return db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        parentId: categories.parentId,
+        productCount: sql<number>`count(${catalogueItems.id})::int`,
+      })
+      .from(categories)
+      .leftJoin(catalogueItems, eq(catalogueItems.categoryId, categories.id))
+      .where(eq(categories.merchantId, merchantId))
+      .groupBy(categories.id)
+      .orderBy(asc(categories.name));
   });
 
   // ---- Suggestions --------------------------------------------------------
@@ -1040,10 +1092,14 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   const addToMushakInput = z.object({
     name: z.string().trim().min(1).max(160).optional(),
     sku: optionalText(64),
+    barcode: optionalText(64),
     unit: z.string().trim().min(1).max(20).optional(),
     hsnCode: optionalText(16),
     taxRate: z.coerce.number().min(0).max(100).optional(),
+    /** Legacy single price (mapped by invoice kind when explicit prices omitted). */
     price: z.coerce.number().min(0).max(10_000_000).optional(),
+    purchasePrice: z.coerce.number().min(0).max(10_000_000).optional(),
+    sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
     categoryId: z.uuid().nullish(),
   });
 
@@ -1087,23 +1143,52 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           .send({ error: "This line is already linked to a Mushak item" });
       }
 
+      const name = input.name ?? line.itemName;
+      const legacyPrice = input.price ?? line.unitPrice;
+      const purchasePrice =
+        input.purchasePrice !== undefined
+          ? input.purchasePrice
+          : invoice.kind === "purchase"
+            ? legacyPrice
+            : 0;
+      const sellingPrice =
+        input.sellingPrice !== undefined
+          ? input.sellingPrice
+          : invoice.kind === "sale"
+            ? legacyPrice
+            : 0;
+      const sku = input.sku ?? (await generateSku(merchantId, name));
+
       try {
         const catalogue = await db.transaction(async (tx) => {
+          if (input.categoryId) {
+            const [cat] = await tx
+              .select({ id: categories.id })
+              .from(categories)
+              .where(
+                and(
+                  eq(categories.id, input.categoryId),
+                  eq(categories.merchantId, merchantId),
+                ),
+              )
+              .limit(1);
+            if (!cat) throw new Error("CATEGORY_NOT_FOUND");
+          }
+
           const [created] = await tx
             .insert(catalogueItems)
             .values({
               merchantId,
-              name: input.name ?? line.itemName,
-              sku: input.sku ?? null,
+              name,
+              sku,
+              barcode: input.barcode ?? null,
               unit: input.unit ?? line.unit,
               hsnCode: input.hsnCode ?? line.hsnCode,
               taxRate: input.taxRate ?? line.taxRate,
               // Prices are a suggestion for Mushak; the invoice snapshot is
               // never rewritten, so historical totals cannot change.
-              purchasePrice:
-                invoice.kind === "purchase" ? input.price ?? line.unitPrice : 0,
-              sellingPrice:
-                invoice.kind === "sale" ? input.price ?? line.unitPrice : 0,
+              purchasePrice,
+              sellingPrice,
               categoryId: input.categoryId ?? null,
             })
             .returning();
@@ -1143,6 +1228,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           invoice: detail,
         });
       } catch (error) {
+        if (error instanceof Error && error.message === "CATEGORY_NOT_FOUND") {
+          return reply.code(400).send({ error: "Category not found" });
+        }
         if (isUniqueViolation(error)) {
           return reply.code(409).send({ error: stockConflictMessage(error) });
         }

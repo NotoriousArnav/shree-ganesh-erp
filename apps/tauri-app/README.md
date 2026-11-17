@@ -34,3 +34,17 @@ npm run tauri build      # desktop bundle for the current platform
 The Android APK/aab is unsigned in CI (falls back to a debug-signed APK when no
 keystore is configured). Add keystore secrets later if store-ready signing is
 needed.
+
+## Releases
+
+Every run uploads its bundles as workflow artifacts (Actions tab). To also
+publish them to the **Releases** tab, push a `tauri-v*` tag or trigger the
+workflow manually with a `release_tag` input:
+
+```bash
+git tag tauri-v0.1.0
+git push origin tauri-v0.1.0
+```
+
+If any unskippable target fails, the `Required builds gate` fails and no release
+is published.

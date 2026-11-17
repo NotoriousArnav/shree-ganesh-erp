@@ -11,6 +11,8 @@ name: Tauri desktop & Android builds
 on:
   push:
     branches: [master]
+    # Tag pushes are not affected by `paths`, so releases always build.
+    tags: ["tauri-v*"]
     paths:
       - "apps/tauri-app/**"
       - ".github/workflows/tauri.yml"
@@ -23,6 +25,11 @@ on:
       - "package.json"
       - "package-lock.json"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag to publish a GitHub Release for (e.g. tauri-v0.1.0). Leave empty to only upload workflow artifacts."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -238,7 +245,8 @@ jobs:
   # ---------------------------------------------------------------------------
   linux-armv7:
     name: Linux armv7 (32-bit ARM)
-    runs-on: ubuntu-latest
+    # ubuntu-22.04 still packages qemu-user-static, which arm-runner-action needs.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -283,7 +291,7 @@ jobs:
   # ---------------------------------------------------------------------------
   android:
     name: Android universal APK (arm64 + armv7)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -304,13 +312,26 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Configure preinstalled Android SDK + NDK
         run: |
-          sdkmanager "ndk;27.0.12077973"
-          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
-          echo "NDK_PATH=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          # The runner image ships the Android SDK; do not use
+          # android-actions/setup-android (it tries to install the removed
+          # "tools" package and fails).
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | sort | tail -1)"
+          test -n "$SDKMANAGER"
+
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "ndk;27.0.12077973" "platform-tools" \
+            "platforms;android-34" "build-tools;34.0.0"
+
+          echo "NDK_HOME=$SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -387,3 +408,32 @@ jobs:
             fi
           done
           exit "$failed"
+
+  # ---------------------------------------------------------------------------
+  # Publish all artifacts to the GitHub Releases tab.
+  # Runs for `tauri-v*` tags, or manually with a `release_tag` input.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/tauri-v') || inputs.release_tag != ''
+    needs: [required-builds]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f | sort
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: Ganesha ERP ${{ inputs.release_tag || github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/**/*

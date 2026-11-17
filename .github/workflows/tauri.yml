@@ -246,8 +246,9 @@ jobs:
   # ---------------------------------------------------------------------------
   linux-armv7:
     name: Linux armv7 (32-bit ARM)
-    # ubuntu-22.04 still packages qemu-user-static, which arm-runner-action needs.
-    runs-on: ubuntu-22.04
+    # Needs qemu-user-static and e2fsprogs >= 1.47 (the trixie image uses
+    # orphan_file, which ubuntu-22.04's e2fsck cannot resize).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

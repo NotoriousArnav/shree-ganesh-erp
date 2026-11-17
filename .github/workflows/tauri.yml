@@ -278,6 +278,9 @@ jobs:
             mkdir -p /tmp/tauri-cli
             cp apps/tauri-app/package.json /tmp/tauri-cli/
             (cd /tmp/tauri-cli && npm install --no-audit --no-fund)
+            # Node resolves imports through node_modules, not PATH, so expose
+            # the isolated frontend toolchain to the app directory.
+            ln -sfn /tmp/tauri-cli/node_modules apps/tauri-app/node_modules
             export PATH="/tmp/tauri-cli/node_modules/.bin:$PATH"
 
             cd apps/tauri-app

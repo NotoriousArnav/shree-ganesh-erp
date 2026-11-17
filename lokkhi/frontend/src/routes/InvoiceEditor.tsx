@@ -23,6 +23,7 @@ import type {
   InvoiceKind,
   InvoiceLinePayload,
   InvoicePayload,
+  PartySuggestion,
   Suggestion,
 } from "@/lib/types";
 
@@ -96,6 +97,10 @@ export default function InvoiceEditor() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestFailed, setSuggestFailed] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const [partySuggestOpen, setPartySuggestOpen] = useState(false);
+  const [partySuggestions, setPartySuggestions] = useState<PartySuggestion[]>([]);
+  const [partySuggestLoading, setPartySuggestLoading] = useState(false);
+  const [partySuggestFailed, setPartySuggestFailed] = useState(false);
 
   const [loading, setLoading] = useState(Boolean(id));
   const [busy, setBusy] = useState(false);
@@ -186,6 +191,42 @@ export default function InvoiceEditor() {
     };
   }, [suggestFor, activeName]);
 
+  useEffect(() => {
+    if (!partySuggestOpen || partyName.trim().length < 2) {
+      setPartySuggestions([]);
+      setPartySuggestFailed(false);
+      setPartySuggestLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPartySuggestLoading(true);
+
+    const timer = setTimeout(() => {
+      api<PartySuggestion[]>(
+        `/api/merchant/invoices/party-suggestions?q=${encodeURIComponent(partyName.trim())}&kind=${kind}`,
+      )
+        .then((result) => {
+          if (cancelled) return;
+          setPartySuggestions(result);
+          setPartySuggestFailed(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPartySuggestions([]);
+          setPartySuggestFailed(true);
+        })
+        .finally(() => {
+          if (!cancelled) setPartySuggestLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [partySuggestOpen, partyName, kind]);
+
   const totals = useMemo(
     () =>
       invoiceTotals(
@@ -218,6 +259,13 @@ export default function InvoiceEditor() {
       ),
     });
     setSuggestFor(null);
+  }
+
+  function pickPartySuggestion(suggestion: PartySuggestion) {
+    setPartyName(suggestion.partyName);
+    setPartyPhone(suggestion.partyPhone ?? "");
+    setPartyGstin(suggestion.partyGstin ?? "");
+    setPartySuggestOpen(false);
   }
 
   function buildPayload(): InvoicePayload | string {
@@ -372,12 +420,54 @@ export default function InvoiceEditor() {
           {kind === "sale" ? (
             <Input value={merchantName ?? "Your shop"} disabled readOnly />
           ) : (
-            <Input
-              value={partyName}
-              onChange={(event) => setPartyName(event.target.value)}
-              placeholder="Supplier name"
-              required
-            />
+            <div className="relative">
+              <Input
+                value={partyName}
+                onChange={(event) => {
+                  setPartyName(event.target.value);
+                  setPartySuggestOpen(true);
+                }}
+                onFocus={() => setPartySuggestOpen(true)}
+                onBlur={() => setTimeout(() => setPartySuggestOpen(false), 120)}
+                placeholder="Supplier name"
+                required
+                autoComplete="off"
+              />
+              {partySuggestOpen && partyName.trim().length >= 2 ? (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  {partySuggestions.map((s) => (
+                    <button
+                      key={`${s.partyName}-${s.partyPhone ?? ""}-${s.partyGstin ?? ""}`}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        pickPartySuggestion(s);
+                      }}
+                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-muted/60"
+                    >
+                      <span className="font-medium">{s.partyName}</span>
+                      {s.partyPhone || s.partyGstin ? (
+                        <span className="text-xs text-muted-foreground">
+                          {[s.partyPhone, s.partyGstin].filter(Boolean).join(" · ")}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                  {partySuggestLoading ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground/70">
+                      Searching past parties…
+                    </p>
+                  ) : null}
+                  {!partySuggestLoading && partySuggestions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      {partySuggestFailed
+                        ? "Suggestions unavailable — you can still type the name."
+                        : "No matching past supplier/customer found."}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           )}
         </Field>
 
@@ -387,12 +477,54 @@ export default function InvoiceEditor() {
           required={kind === "sale"}
         >
           {kind === "sale" ? (
-            <Input
-              value={partyName}
-              onChange={(event) => setPartyName(event.target.value)}
-              placeholder="Walk-in customer"
-              required
-            />
+            <div className="relative">
+              <Input
+                value={partyName}
+                onChange={(event) => {
+                  setPartyName(event.target.value);
+                  setPartySuggestOpen(true);
+                }}
+                onFocus={() => setPartySuggestOpen(true)}
+                onBlur={() => setTimeout(() => setPartySuggestOpen(false), 120)}
+                placeholder="Walk-in customer"
+                required
+                autoComplete="off"
+              />
+              {partySuggestOpen && partyName.trim().length >= 2 ? (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  {partySuggestions.map((s) => (
+                    <button
+                      key={`${s.partyName}-${s.partyPhone ?? ""}-${s.partyGstin ?? ""}`}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        pickPartySuggestion(s);
+                      }}
+                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-muted/60"
+                    >
+                      <span className="font-medium">{s.partyName}</span>
+                      {s.partyPhone || s.partyGstin ? (
+                        <span className="text-xs text-muted-foreground">
+                          {[s.partyPhone, s.partyGstin].filter(Boolean).join(" · ")}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                  {partySuggestLoading ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground/70">
+                      Searching past parties…
+                    </p>
+                  ) : null}
+                  {!partySuggestLoading && partySuggestions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      {partySuggestFailed
+                        ? "Suggestions unavailable — you can still type the name."
+                        : "No matching past supplier/customer found."}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <Input value={merchantName ?? "Your shop"} disabled readOnly />
           )}

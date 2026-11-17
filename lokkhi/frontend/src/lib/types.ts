@@ -77,6 +77,13 @@ export type Suggestion = {
   stockQty: number;
 };
 
+export type PartySuggestion = {
+  partyName: string;
+  partyPhone: string | null;
+  partyGstin: string | null;
+  partyAddress: Record<string, string> | null;
+};
+
 export type InvoiceLinePayload = {
   catalogueItemId?: string | null;
   itemName: string;

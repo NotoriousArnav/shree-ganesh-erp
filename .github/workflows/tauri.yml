@@ -5,8 +5,9 @@ name: Tauri desktop & Android builds
 #   Windows  -> x86_64 (required). 32-bit x86 (i686) is the only 32-bit Windows
 #               target Tauri supports; Windows ARM32 does not exist.
 #   Linux    -> x86_64, arm64, armv7 (armhf, 32-bit ARM).
-#   Android  -> universal APK containing arm64-v8a + armeabi-v7a (both required)
-#               plus the x86 ABIs used by emulators.
+#   Android  -> one universal APK with all four ABIs: arm64-v8a, armeabi-v7a,
+#               x86_64 and x86. arm64 + armv7 are required; x86 ABIs support
+#               emulators and older x86 tablets.
 
 on:
   push:
@@ -347,13 +348,16 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: npm run tauri -- android init --ci
 
-      - name: Build universal APK
+      - name: Build universal APK (arm64 + armv7 + x86_64 + x86)
         working-directory: ${{ env.APP_DIR }}
         run: |
-          # Unsigned release APK; falls back to a debug-signed APK if the
-          # release step insists on a keystore.
+          # All four ABIs go into one universal APK: arm64-v8a, armeabi-v7a,
+          # x86_64 and x86. Unsigned release APK; falls back to a debug-signed
+          # APK if the release step insists on a keystore.
           npm run tauri -- android build --apk --ci \
-            || npm run tauri -- android build --apk --debug --ci
+            --target aarch64 armv7 i686 x86_64 \
+            || npm run tauri -- android build --apk --debug --ci \
+              --target aarch64 armv7 i686 x86_64
 
       - name: List APK outputs
         run: find "${{ env.APP_DIR }}/src-tauri/gen/android/app/build/outputs" -type f | sort

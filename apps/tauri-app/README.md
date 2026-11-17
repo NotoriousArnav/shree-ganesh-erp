@@ -29,7 +29,7 @@ npm run tauri build      # desktop bundle for the current platform
 | Linux | `x86_64-unknown-linux-gnu` | Required. AppImage + deb. |
 | Linux | `aarch64-unknown-linux-gnu` | Required. Native `ubuntu-24.04-arm` runner. |
 | Linux | `armv7-unknown-linux-gnueabihf` | Required. Built natively in a 32-bit Raspberry Pi OS VM (`pguyot/arm-runner-action`). |
-| Android | universal APK | Required ABIs: `arm64-v8a` + `armeabi-v7a` (plus x86 ABIs for emulators). |
+| Android | universal APK | One APK with all four ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`. arm64 + armv7 are required; x86 covers emulators. |
 
 The Android APK/aab is unsigned in CI (falls back to a debug-signed APK when no
 keystore is configured). Add keystore secrets later if store-ready signing is

@@ -8,7 +8,8 @@
     "mushak/frontend",
     "mushak/backend",
     "lokkhi/frontend",
-    "lokkhi/backend"
+    "lokkhi/backend",
+    "apps/tauri-app"
   ],
   "scripts": {
     "build:packages": "npm run build -w packages/db && npm run build -w packages/shared && npm run build -w packages/server",
@@ -19,6 +20,8 @@
     "build:mushak": "npm run build -w mushak/frontend -w mushak/backend",
     "dev:lokkhi": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w lokkhi/frontend\" \"npm run dev -w lokkhi/backend\"",
     "build:lokkhi": "npm run build -w lokkhi/frontend -w lokkhi/backend",
+    "dev:tauri": "npm run tauri -w apps/tauri-app -- dev",
+    "build:tauri": "npm run tauri -w apps/tauri-app -- build",
     "test": "node --import tsx --test \"mushak/**/*.test.ts\" \"lokkhi/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
     "test:mushak": "node --import tsx --test \"mushak/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",
     "test:lokkhi": "node --import tsx --test \"lokkhi/**/*.test.ts\" \"packages/shared/src/**/*.test.ts\"",

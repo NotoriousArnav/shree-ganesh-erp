@@ -1,6 +1,6 @@
 # AGENTS.md
 
-npm workspaces monorepo: `packages/*`, `mushak/{frontend,backend}`, `lokkhi/{frontend,backend}`. No root `tsconfig`, linter, or formatter.
+npm workspaces monorepo: `packages/*`, `mushak/{frontend,backend}`, `lokkhi/{frontend,backend}`, `apps/tauri-app`. No root `tsconfig`, linter, or formatter.
 
 ## Commands (run from repo root unless noted)
 
@@ -13,6 +13,7 @@ npm workspaces monorepo: `packages/*`, `mushak/{frontend,backend}`, `lokkhi/{fro
 - `npm run db:up` / `db:down` / `db:migrate` / `db:studio` — proxied to `mushak/backend` (Postgres 17 + RustFS compose in `mushak/backend/docker-compose.yml`).
 - `npm run seed:admin`, `seed:demo`, `user:create -- ...`, `mail:test` — scripts run via `mushak/backend`.
 - `npm run docs:openapi` / `docs:all` — OpenAPI export and Hugo docs (`scripts/build-docs.mjs`, needs Hugo theme clone/network in CI context).
+- `npm run dev:tauri` / `npm run build:tauri` — Tauri shell in `apps/tauri-app` (desktop dev/bundle; Android via `npm run tauri -w apps/tauri-app -- android ...`). Requires Rust; app does not import the ERP packages.
 
 ## High-signal gotchas
 
@@ -31,3 +32,4 @@ npm workspaces monorepo: `packages/*`, `mushak/{frontend,backend}`, `lokkhi/{fro
 - **Split backends**: `docker/{mushak,lokkhi}.Dockerfile` (repo-root context), `fly.{mushak,lokkhi}.toml`. Frontends can deploy separately (e.g. Netlify per app; `BACKEND_URL` substitution in app `netlify.toml`).
 - **Vercel (combined)**: root `vercel.json` routes `/api/*`+Mushak paths to `api/mushak`, `/lokkhi/api/*`+Lokkhi paths to `api/lokkhi`, with SPA rewrites/headers; build via `npm run build:vercel` (`build:dist`).
 - **CI**: `.github/workflows/docs.yml` — `npm ci` + `npm test` on push to `master` and PRs; on non-PR runs also builds docs and deploys `dist/docs` to GitHub Pages. Edit docs in `<app>/docs/` (not `dist/`/`site/`).
+- **Tauri CI**: `.github/workflows/tauri.yml` — builds macOS universal, Windows x86_64 (+ best-effort i686), Linux x86_64/arm64/armv7, and an Android universal APK (arm64-v8a + armeabi-v7a). A `required-builds` gate fails if any unskippable target fails. No Rust target exists for macOS ARM32 or Windows ARM32.

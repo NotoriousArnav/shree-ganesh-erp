@@ -1,0 +1,389 @@
+name: Tauri desktop & Android builds
+
+# Matrix reality check (Tauri/Rust targets):
+#   macOS    -> x86_64 + arm64 (universal bundle). Apple has no 32-bit ARM target.
+#   Windows  -> x86_64 (required). 32-bit x86 (i686) is the only 32-bit Windows
+#               target Tauri supports; Windows ARM32 does not exist.
+#   Linux    -> x86_64, arm64, armv7 (armhf, 32-bit ARM).
+#   Android  -> universal APK containing arm64-v8a + armeabi-v7a (both required)
+#               plus the x86 ABIs used by emulators.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/tauri-app/**"
+      - ".github/workflows/tauri.yml"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "apps/tauri-app/**"
+      - ".github/workflows/tauri.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: apps/tauri-app
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS: universal binary (x86_64 + arm64)
+  # ---------------------------------------------------------------------------
+  macos-universal:
+    name: macOS universal (x86_64 + arm64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build universal app
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- build --target universal-apple-darwin --bundles dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-macos-universal
+          if-no-files-found: error
+          path: ${{ env.APP_DIR }}/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  # ---------------------------------------------------------------------------
+  # Windows x86_64 (required)
+  # ---------------------------------------------------------------------------
+  windows-x64:
+    name: Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build NSIS + MSI
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis,msi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-windows-x86_64
+          if-no-files-found: error
+          path: |
+            ${{ env.APP_DIR }}/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            ${{ env.APP_DIR }}/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+
+  # ---------------------------------------------------------------------------
+  # Windows 32-bit (best-effort, not required by the build gate)
+  # ---------------------------------------------------------------------------
+  windows-x86:
+    name: Windows x86 (32-bit, best effort)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build 32-bit NSIS
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- build --target i686-pc-windows-msvc --bundles nsis
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tauri-windows-x86
+          if-no-files-found: warn
+          path: ${{ env.APP_DIR }}/src-tauri/target/i686-pc-windows-msvc/release/bundle/nsis/*.exe
+
+  # ---------------------------------------------------------------------------
+  # Linux x86_64 (required)
+  # ---------------------------------------------------------------------------
+  linux-x64:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev build-essential pkg-config \
+            patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build AppImage + deb
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- build --target x86_64-unknown-linux-gnu --bundles appimage,deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-linux-x86_64
+          if-no-files-found: error
+          path: |
+            ${{ env.APP_DIR }}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            ${{ env.APP_DIR }}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+
+  # ---------------------------------------------------------------------------
+  # Linux arm64 (required) - native ARM runner
+  # ---------------------------------------------------------------------------
+  linux-arm64:
+    name: Linux arm64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev build-essential pkg-config \
+            patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build AppImage + deb
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- build --target aarch64-unknown-linux-gnu --bundles appimage,deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-linux-arm64
+          if-no-files-found: error
+          path: |
+            ${{ env.APP_DIR }}/src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            ${{ env.APP_DIR }}/src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
+
+  # ---------------------------------------------------------------------------
+  # Linux armv7 / armhf (32-bit ARM, required).
+  # Cross-compiling WebKitGTK is impractical, so build natively inside a
+  # Raspberry Pi OS (32-bit userland) VM under QEMU.
+  # ---------------------------------------------------------------------------
+  linux-armv7:
+    name: Linux armv7 (32-bit ARM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build inside 32-bit ARM image
+        uses: pguyot/arm-runner-action@v2
+        with:
+          base_image: https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2026-10-06/2026-10-06-raspios-trixie-armhf-lite.img.xz
+          cpu: cortex-a53
+          image_additional_mb: 8192
+          bind_mount_repository: true
+          commands: |
+            set -euxo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+              librsvg2-dev libxdo-dev libssl-dev build-essential pkg-config \
+              curl ca-certificates nodejs npm file
+
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            . "$HOME/.cargo/env"
+            rustup target add armv7-unknown-linux-gnueabihf
+
+            # Install the Tauri CLI + frontend toolchain in an isolated folder so
+            # the monorepo's other workspaces are not installed on the slow VM.
+            mkdir -p /tmp/tauri-cli
+            cp apps/tauri-app/package.json /tmp/tauri-cli/
+            (cd /tmp/tauri-cli && npm install --no-audit --no-fund)
+            export PATH="/tmp/tauri-cli/node_modules/.bin:$PATH"
+
+            cd apps/tauri-app
+            tauri build --target armv7-unknown-linux-gnueabihf --bundles deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-linux-armv7
+          if-no-files-found: error
+          path: ${{ env.APP_DIR }}/src-tauri/target/armv7-unknown-linux-gnueabihf/release/bundle/deb/*.deb
+
+  # ---------------------------------------------------------------------------
+  # Android: universal APK (arm64-v8a + armeabi-v7a, both required)
+  # ---------------------------------------------------------------------------
+  android:
+    name: Android universal APK (arm64 + armv7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            build-essential pkg-config patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "NDK_PATH=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.APP_DIR }}/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Initialize Android project
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run tauri -- android init --ci
+
+      - name: Build universal APK
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          # Unsigned release APK; falls back to a debug-signed APK if the
+          # release step insists on a keystore.
+          npm run tauri -- android build --apk --ci \
+            || npm run tauri -- android build --apk --debug --ci
+
+      - name: List APK outputs
+        run: find "${{ env.APP_DIR }}/src-tauri/gen/android/app/build/outputs" -type f | sort
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-universal
+          if-no-files-found: error
+          path: |
+            ${{ env.APP_DIR }}/src-tauri/gen/android/app/build/outputs/apk/universal/**/*.apk
+            ${{ env.APP_DIR }}/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            ${{ env.APP_DIR }}/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          overwrite: true
+
+  # ---------------------------------------------------------------------------
+  # Gate: fail the workflow if an unskippable target did not produce artifacts.
+  # ---------------------------------------------------------------------------
+  required-builds:
+    name: Required builds gate
+    if: always()
+    needs:
+      - macos-universal
+      - windows-x64
+      - linux-x64
+      - linux-arm64
+      - linux-armv7
+      - android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify unskippable targets succeeded
+        run: |
+          echo "macOS universal: ${{ needs.macos-universal.result }}"
+          echo "Windows x86_64:  ${{ needs.windows-x64.result }}"
+          echo "Linux x86_64:    ${{ needs.linux-x64.result }}"
+          echo "Linux arm64:     ${{ needs.linux-arm64.result }}"
+          echo "Linux armv7:     ${{ needs.linux-armv7.result }}"
+          echo "Android:         ${{ needs.android.result }}"
+
+          failed=0
+          for entry in \
+            "macos-universal=${{ needs.macos-universal.result }}" \
+            "windows-x64=${{ needs.windows-x64.result }}" \
+            "linux-x64=${{ needs.linux-x64.result }}" \
+            "linux-arm64=${{ needs.linux-arm64.result }}" \
+            "linux-armv7=${{ needs.linux-armv7.result }}" \
+            "android=${{ needs.android.result }}"; do
+            name="${entry%%=*}"
+            result="${entry#*=}"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name build did not succeed ($result)"
+              failed=1
+            fi
+          done
+          exit "$failed"
